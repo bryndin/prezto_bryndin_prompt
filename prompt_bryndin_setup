@@ -111,7 +111,7 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:keys' format \
     'prompt' '(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u)'
 
-  # Set python (virtualenv) parameters. 
+  # Set python-info (virtualenv) parameters. 
   zstyle ':prezto:module:python:info:virtualenv' format '<%F{yellow}%v%f>'
 
   # Pattern listing visual modifiers
