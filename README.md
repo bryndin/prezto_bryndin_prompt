@@ -19,6 +19,7 @@ Screenshots
 
 Requirements
 ------------
+prezto modules:
   * git
   * python
   * helper
