@@ -12,8 +12,5 @@ Features:
    - git info
    - current dir (automatically falls back to shortened version if too long)
 
- Authors:
-   Dmitriy Bryndin <bryndin@gmail.com>
-
  Screenshots:
    [http://i.imgur.com/b2M5eOw.png?1](http://i.imgur.com/b2M5eOw.png?1)
