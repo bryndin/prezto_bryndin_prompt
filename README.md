@@ -16,3 +16,10 @@ Features
 Screenshots
 -----------
 ![alt prompt screenshot](http://i.imgur.com/b2M5eOw.png?1 "Prompt screenshot")
+
+Requirements
+------------
+  * git
+  * python
+  * helper
+  * editor
