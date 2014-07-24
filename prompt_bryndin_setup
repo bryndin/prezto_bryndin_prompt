@@ -1,0 +1,141 @@
+#
+# My custom 2 line prompt
+#
+# Features:
+#   - full terminal width top line to visually separate different runs
+#   - current time
+#   - current user
+#   - host (only shown on remote machines)
+#   - active pythons virtualenv
+#   - git info
+#   - current dir (automatically falls back to shortened version if too long)
+#
+# Authors:
+#   Dmitriy Bryndin <bryndin@gmail.com>
+#
+# Screenshots:
+#   http://i.imgur.com/b2M5eOw.png?1
+#
+
+# Load dependencies.
+pmodload 'helper'
+
+function prepare_compressed_pwd {
+  local pwd="${PWD/#$HOME/~}"
+
+  if [[ "$pwd" == (#m)[/~] ]]; then
+    _cur_dir="[$MATCH]"
+    unset MATCH
+  else
+    _cur_dir="[${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}]"
+  fi
+}
+
+function prepare_full_pwd {
+  [[ -w $PWD ]] && _cur_dir='[%d]' || _cur_dir='[%F{red}%d%f]'
+}
+
+function prepare_header {
+  # do all substitutions and expansions
+  __left=${(e)_left_header}
+  __right=${(e)_right_header}
+  # remove non-printable color characters to compute length correctly
+  _left_width=${#${(S%%)__left//$~__zero/}}
+  _right_width=${#${(S%%)__right//$~__zero/}}
+  # do prompt related expansions
+  _left=${(%)__left}
+  _right=${(%)__right}
+
+  _filler_width=$(( $COLUMNS - 1 - $_left_width - $_right_width ))
+}
+
+function prompt_bryndin_precmd {
+  setopt LOCAL_OPTIONS
+  unsetopt XTRACE KSH_ARRAYS
+
+  # Format PWD.
+  prepare_full_pwd
+
+  # Get Git repository information.
+  if (( $+functions[git-info] )); then
+    git-info
+  fi
+
+  # Get Virtualenv information. 
+  python-info
+
+  # Prepare header line
+  prepare_header
+
+  _filler=""
+  # fallback to compressed PWD if blocks aren't fitting
+  [[ _filler_width -lt 0 ]] && prepare_compressed_pwd && prepare_header
+  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${_separator}
+  #echo $COLUMNS $_left_width $_right_width
+  #echo $_filler ${#_filler} $_filler_width
+  echo ${_left}${_filler}${_right}
+}
+
+function prompt_bryndin_setup {
+  setopt LOCAL_OPTIONS
+  unsetopt XTRACE KSH_ARRAYS
+  prompt_opts=(cr percent subst)
+
+  # Load required functions.
+  autoload -Uz add-zsh-hook
+
+  # Add hook for calling git-info before each command.
+  add-zsh-hook precmd prompt_bryndin_precmd
+
+  # Set editor-info parameters.
+  zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
+  zstyle ':prezto:module:editor:info:keymap:primary' format '%B%F{red}❯%F{yellow}❯%F{green}❯%f%b'
+  zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '%F{red}♺%f'
+  zstyle ':prezto:module:editor:info:keymap:alternate' format '%B%F{green}❮%F{yellow}❮%F{red}❮%f%b'
+
+  # Set git-info parameters.
+  zstyle ':prezto:module:git:info' verbose 'yes'
+  zstyle ':prezto:module:git:info:action' format ':%%B%F{yellow}%s%f%%b'
+  zstyle ':prezto:module:git:info:added' format ' %%B%F{green}✚%f%%b'
+  zstyle ':prezto:module:git:info:ahead' format ' %%B%F{yellow}⬆%f%%b'
+  zstyle ':prezto:module:git:info:behind' format ' %%B%F{yellow}⬇%f%%b'
+  zstyle ':prezto:module:git:info:branch' format ':%F{green}%b%f'
+  zstyle ':prezto:module:git:info:commit' format ':%F{green}%.7c%f'
+  zstyle ':prezto:module:git:info:deleted' format ' %%B%F{red}✖%f%%b'
+  zstyle ':prezto:module:git:info:modified' format ' %%B%F{blue}✱%f%%b'
+  zstyle ':prezto:module:git:info:position' format ':%F{red}%p%f'
+  zstyle ':prezto:module:git:info:renamed' format ' %%B%F{magenta}➜%f%%b'
+  zstyle ':prezto:module:git:info:stashed' format ' %%B%F{cyan}✭%f%%b'
+  zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
+  zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
+  zstyle ':prezto:module:git:info:keys' format \
+    'prompt' '(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u)'
+
+  # Set python (virtualenv) parameters. 
+  zstyle ':prezto:module:python:info:virtualenv' format '<%F{yellow}%v%f>'
+
+  # Pattern listing visual modifiers
+  __zero='%([BSUbfksu]|([FB]|){*})'
+
+  # Header blocks
+  _time='(%T)'
+
+  [[ -n $SSH_CLIENT ]] && _host='@%F{cyan}%m%f' || _host=''
+  _user_host="(%(!.%F{red}%n%f.%F{cyan}%n%f$_host))"
+
+  __git='${git_info:+${(e)git_info[prompt]}}'
+
+  _virtualenv='${python_info[virtualenv]}'
+
+  #_separator=${altchar[q]:--}
+  _separator='─'
+
+  # Define prompts
+  _left_header="${_separator}${_time}${_separator}${_user_host}${_separator}${_virtualenv}${_separator}${__git}"
+  _right_header='${_cur_dir}'"${_separator}"
+  PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
+  SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
+}
+
+prompt_bryndin_setup "$@"
+
