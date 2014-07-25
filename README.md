@@ -8,10 +8,12 @@ Features
   * full terminal width top line to visually separate different runs
   * current time
   * current user
+  * highlites root users in red
   * host (only shown on remote machines)
   * active pythons virtualenv
   * git info
   * current dir (automatically falls back to shortened version if too long)
+  * highlights dirs without write permission in red
 
 Screenshots
 -----------
