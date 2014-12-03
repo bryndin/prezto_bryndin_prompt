@@ -135,6 +135,9 @@ function prompt_bryndin_setup {
   _right_header='${_cur_dir}'"${_separator}"
   PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
+
+  # Disable VirtualEnv prompt
+  VIRTUAL_ENV_DISABLE_PROMPT=1
 }
 
 prompt_bryndin_setup "$@"
