@@ -17,7 +17,8 @@
 #   http://i.imgur.com/b2M5eOw.png?1
 #
 
-separator="%{%F{cyan}%}─%{%f%}"
+color="cyan"
+separator="%{%F{${color}}%}─%{%f%}"
 
 # Load dependencies.
 pmodload 'helper'
