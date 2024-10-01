@@ -17,6 +17,8 @@
 #   http://i.imgur.com/b2M5eOw.png?1
 #
 
+separator='─'
+
 # Load dependencies.
 pmodload 'helper'
 
@@ -70,7 +72,7 @@ function prompt_bryndin_precmd {
   _filler=""
   # fallback to compressed PWD if blocks aren't fitting
   [[ _filler_width -lt 0 ]] && prepare_compressed_pwd && prepare_header
-  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${_separator}
+  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${separator}
   #echo $COLUMNS $_left_width $_right_width
   #echo $_filler ${#_filler} $_filler_width
   echo ${_left}${_filler}${_right}
@@ -127,12 +129,9 @@ function prompt_bryndin_setup {
 
   _virtualenv='${python_info[virtualenv]}'
 
-  #_separator=${altchar[q]:--}
-  _separator='─'
-
   # Define prompts
-  _left_header="${_separator}${_time}${_separator}${_user_host}${_separator}${_virtualenv}${_separator}${__git}"
-  _right_header='${_cur_dir}'"${_separator}"
+  _left_header="${separator}${_time}${separator}${_user_host}${separator}${_virtualenv}${separator}${__git}"
+  _right_header='${_cur_dir}'"${separator}"
   PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
