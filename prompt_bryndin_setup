@@ -17,7 +17,7 @@
 #   http://i.imgur.com/b2M5eOw.png?1
 #
 
-separator='─'
+separator="%{%F{cyan}%}─%{%f%}"
 
 # Load dependencies.
 pmodload 'helper'
@@ -72,10 +72,8 @@ function prompt_bryndin_precmd {
   _filler=""
   # fallback to compressed PWD if blocks aren't fitting
   [[ _filler_width -lt 0 ]] && prepare_compressed_pwd && prepare_header
-  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${separator}
-  #echo $COLUMNS $_left_width $_right_width
-  #echo $_filler ${#_filler} $_filler_width
-  echo ${_left}${_filler}${_right}
+  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${(%)separator}
+  print ${_left}${_filler}${_right}
 }
 
 function prompt_bryndin_setup {
