@@ -18,7 +18,6 @@
 #
 
 color="cyan"
-separator="%{%F{${color}}%}─%{%f%}"
 
 # Load dependencies.
 pmodload 'helper'
@@ -70,14 +69,21 @@ function prompt_bryndin_precmd {
   # Prepare header line
   prepare_header
 
-  local _filler=""
+  local filler=""
   # fallback to compressed PWD if blocks aren't fitting
   [[ _filler_width -lt 0 ]] && _cur_dir="[$(prepare_compressed_pwd)]" && prepare_header
-  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${(%)separator}
-  print ${_left}${_filler}${_right}
+  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) filler+='─'
+  print ${_left}${(%)$(fgcolor "${filler}" "$color")}${_right}
 }
 
 function prompt_bryndin_setup {
+  function fgcolor {
+    local text=$1
+    local color=$2
+
+    print -n "%{%F{$color}%}$text%{%f%}"
+  }
+
   setopt LOCAL_OPTIONS
   unsetopt XTRACE KSH_ARRAYS
   prompt_opts=(cr percent subst)
@@ -87,6 +93,10 @@ function prompt_bryndin_setup {
 
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_bryndin_precmd
+
+  # shortcuts to set and reset foreground color
+  local fg="%{%F{${color}}%}" # set foreground color
+  local gf="%{%f%}"           # reset foreground color
 
   # Set editor-info parameters.
   zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
@@ -110,26 +120,30 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
   zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
   zstyle ':prezto:module:git:info:keys' format \
-    'prompt' '${separator}(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u)'
+    'prompt' "$(fgcolor '─(' "$color")%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u$(fgcolor ')' "$color")"
 
   # Set python-info (virtualenv) parameters. 
-  zstyle ':prezto:module:python:info:virtualenv' format '${separator}<%F{yellow}%v%f>'
+  zstyle ':prezto:module:python:info:virtualenv' format "$(fgcolor '─<' "$color")$(fgcolor "%v" "yellow")$(fgcolor '>' "$color")"
 
   # Pattern listing visual modifiers
   __zero='%([BSUbfksu]|([FB]|){*})'
 
   # Header blocks
-  _time='${separator}(%T)'
+  local time='%T'
+  local time_block="$(fgcolor '─(' "$color")$(fgcolor "$time" "white")$(fgcolor ')' "$color")"
 
-  [[ -n $SSH_CLIENT ]] && _host='@%F{cyan}%m%f' || _host=''
-  _user_host="${separator}(%(!.%F{red}%n%f.%F{cyan}%n%f$_host))"
+  local host=''
+  # TODO: decide if the "@" sign needs a color change on remote hosts
+  # e.g. user@hostname has white @
+  [[ -n $SSH_CLIENT ]] && host='@%F{cyan}%m%f'
+  host_block="$(fgcolor '─(' "$color")"%(!.%F{red}%n%f.%F{cyan}%n%f$host)"$(fgcolor ')' "$color")"
 
-  __git='${git_info:+${(e)git_info[prompt]}}'
+  local git_block='${git_info:+${(e)git_info[prompt]}}'
 
-  _virtualenv='${python_info[virtualenv]}'
+  local virtualenv_block='${python_info[virtualenv]}'
 
   # Define prompts
-  _left_header="${_time}${_user_host}${_virtualenv}${__git}"
+  _left_header="${time_block}${host_block}${virtualenv_block}${git_block}"
   _right_header='${_cur_dir}'
   PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
