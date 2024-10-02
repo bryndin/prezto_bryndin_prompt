@@ -23,41 +23,41 @@ separator="%{%F{${color}}%}─%{%f%}"
 # Load dependencies.
 pmodload 'helper'
 
-function prepare_compressed_pwd {
-  local pwd="${PWD/#$HOME/~}"
-
-  if [[ "$pwd" == (#m)[/~] ]]; then
-    _cur_dir="[$MATCH]"
-    unset MATCH
-  else
-    _cur_dir="[${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}]"
-  fi
-}
-
-function prepare_full_pwd {
-  [[ -w $PWD ]] && _cur_dir='[%d]' || _cur_dir='[%F{red}%d%f]'
-}
-
 function prepare_header {
   # do all substitutions and expansions
-  __left=${(e)_left_header}
-  __right=${(e)_right_header}
+  local left=${(e)_left_header}
+  local right=${(e)_right_header}
   # remove non-printable color characters to compute length correctly
-  _left_width=${#${(S%%)__left//$~__zero/}}
-  _right_width=${#${(S%%)__right//$~__zero/}}
+  local left_width=${#${(S%%)left//$~__zero/}}
+  local right_width=${#${(S%%)right//$~__zero/}}
   # do prompt related expansions
-  _left=${(%)__left}
-  _right=${(%)__right}
+  _left=${(%)left}
+  _right=${(%)right}
 
-  _filler_width=$(( $COLUMNS - 1 - $_left_width - $_right_width ))
+  _filler_width=$(( $COLUMNS - 1 - $left_width - $right_width ))
 }
 
 function prompt_bryndin_precmd {
+  function prepare_full_pwd {
+    [[ -w $PWD ]] && print -n '%d' || print -n '%F{red}%d%f'
+  }
+
+  function prepare_compressed_pwd {
+    local pwd="${PWD/#$HOME/~}"
+
+    if [[ "$pwd" == (#m)[/~] ]]; then
+      print -n "$MATCH"
+      unset MATCH
+    else
+      print -n "${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
+    fi
+  }
+
   setopt LOCAL_OPTIONS
   unsetopt XTRACE KSH_ARRAYS
 
   # Format PWD.
-  prepare_full_pwd
+  _cur_dir="[$(prepare_full_pwd)]"
 
   # Get Git repository information.
   if (( $+functions[git-info] )); then
@@ -70,9 +70,9 @@ function prompt_bryndin_precmd {
   # Prepare header line
   prepare_header
 
-  _filler=""
+  local _filler=""
   # fallback to compressed PWD if blocks aren't fitting
-  [[ _filler_width -lt 0 ]] && prepare_compressed_pwd && prepare_header
+  [[ _filler_width -lt 0 ]] && _cur_dir="[$(prepare_compressed_pwd)]" && prepare_header
   [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) _filler+=${(%)separator}
   print ${_left}${_filler}${_right}
 }
@@ -110,27 +110,27 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
   zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
   zstyle ':prezto:module:git:info:keys' format \
-    'prompt' '(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u)'
+    'prompt' '${separator}(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u)'
 
   # Set python-info (virtualenv) parameters. 
-  zstyle ':prezto:module:python:info:virtualenv' format '<%F{yellow}%v%f>'
+  zstyle ':prezto:module:python:info:virtualenv' format '${separator}<%F{yellow}%v%f>'
 
   # Pattern listing visual modifiers
   __zero='%([BSUbfksu]|([FB]|){*})'
 
   # Header blocks
-  _time='(%T)'
+  _time='${separator}(%T)'
 
   [[ -n $SSH_CLIENT ]] && _host='@%F{cyan}%m%f' || _host=''
-  _user_host="(%(!.%F{red}%n%f.%F{cyan}%n%f$_host))"
+  _user_host="${separator}(%(!.%F{red}%n%f.%F{cyan}%n%f$_host))"
 
   __git='${git_info:+${(e)git_info[prompt]}}'
 
   _virtualenv='${python_info[virtualenv]}'
 
   # Define prompts
-  _left_header="${separator}${_time}${separator}${_user_host}${separator}${_virtualenv}${separator}${__git}"
-  _right_header='${_cur_dir}'"${separator}"
+  _left_header="${_time}${_user_host}${_virtualenv}${__git}"
+  _right_header='${_cur_dir}'
   PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
@@ -139,4 +139,3 @@ function prompt_bryndin_setup {
 }
 
 prompt_bryndin_setup "$@"
-
