@@ -24,7 +24,7 @@ prompt_virtualenv_color="yellow"
 prompt_dir_color="33"
 
 # Load dependencies.
-pmodload 'helper'
+pmodload 'helper' 'python' 'git'
 
 function prepare_header {
   # do all substitutions and expansions
