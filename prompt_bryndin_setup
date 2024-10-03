@@ -26,12 +26,13 @@ function prepare_header {
   # do all substitutions and expansions
   local left=${(e)_left_header}
   local right=${(e)_right_header}
+
+  # Pattern listing visual modifiers
+  local zero='%([BSUbfksu]|([FB]|){*})'
+
   # remove non-printable color characters to compute length correctly
-  local left_width=${#${(S%%)left//$~__zero/}}
-  local right_width=${#${(S%%)right//$~__zero/}}
-  # do prompt related expansions
-  _left=${(%)left}
-  _right=${(%)right}
+  local left_width=${#${(S%%)left//$~zero/}}
+  local right_width=${#${(S%%)right//$~zero/}}
 
   _filler_width=$(( $COLUMNS - 1 - $left_width - $right_width ))
 }
@@ -73,7 +74,9 @@ function prompt_bryndin_precmd {
   # fallback to compressed PWD if blocks aren't fitting
   [[ _filler_width -lt 0 ]] && _cur_dir="[$(prepare_compressed_pwd)]" && prepare_header
   [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) filler+='─'
-  print ${_left}${(%)$(fgcolor "${filler}" "$color")}${_right}
+
+  # print with expansion
+  print -P ${_left_header}${(%)$(fgcolor "${filler}" "$color")}${_right_header}
 }
 
 function prompt_bryndin_setup {
@@ -124,9 +127,6 @@ function prompt_bryndin_setup {
 
   # Set python-info (virtualenv) parameters. 
   zstyle ':prezto:module:python:info:virtualenv' format "$(fgcolor '─<' "$color")$(fgcolor "%v" "yellow")$(fgcolor '>' "$color")"
-
-  # Pattern listing visual modifiers
-  __zero='%([BSUbfksu]|([FB]|){*})'
 
   # Header blocks
   local time='%T'
