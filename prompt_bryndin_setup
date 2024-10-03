@@ -57,7 +57,7 @@ function prompt_bryndin_precmd {
   unsetopt XTRACE KSH_ARRAYS
 
   # Format PWD.
-  _cur_dir="[$(prepare_full_pwd)]"
+  _cur_dir="$(prepare_full_pwd)"
 
   # Get Git repository information.
   if (( $+functions[git-info] )); then
@@ -72,21 +72,14 @@ function prompt_bryndin_precmd {
 
   local filler=""
   # fallback to compressed PWD if blocks aren't fitting
-  [[ _filler_width -lt 0 ]] && _cur_dir="[$(prepare_compressed_pwd)]" && prepare_header
+  [[ _filler_width -lt 0 ]] && _cur_dir="$(prepare_compressed_pwd)" && prepare_header
   [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) filler+='─'
 
   # print with expansion
-  print -P ${_left_header}${(%)$(fgcolor "${filler}" "$color")}${_right_header}
+  print -P ${_left_header}%F{$color}${filler}%f${_right_header}
 }
 
 function prompt_bryndin_setup {
-  function fgcolor {
-    local text=$1
-    local color=$2
-
-    print -n "%{%F{$color}%}$text%{%f%}"
-  }
-
   setopt LOCAL_OPTIONS
   unsetopt XTRACE KSH_ARRAYS
   prompt_opts=(cr percent subst)
@@ -123,28 +116,30 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
   zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
   zstyle ':prezto:module:git:info:keys' format \
-    'prompt' "$(fgcolor '─(' "$color")%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u$(fgcolor ')' "$color")"
+    'prompt' "%F{$color}─(%f%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u%F{$color})%f"
 
   # Set python-info (virtualenv) parameters. 
-  zstyle ':prezto:module:python:info:virtualenv' format "$(fgcolor '─<' "$color")$(fgcolor "%v" "yellow")$(fgcolor '>' "$color")"
+  zstyle ':prezto:module:python:info:virtualenv' format "%F{$color}─<%f%F{yellow}%v%f%F{$color}>%f"
 
   # Header blocks
   local time='%T'
-  local time_block="$(fgcolor '─(' "$color")$(fgcolor "$time" "white")$(fgcolor ')' "$color")"
+  local time_block="%F{$color}─(%f${time}%F{$color})%f"
 
   local host=''
   # TODO: decide if the "@" sign needs a color change on remote hosts
   # e.g. user@hostname has white @
   [[ -n $SSH_CLIENT ]] && host='@%F{cyan}%m%f'
-  host_block="$(fgcolor '─(' "$color")"%(!.%F{red}%n%f.%F{cyan}%n%f$host)"$(fgcolor ')' "$color")"
+  host_block="%F{$color}─(%f%(!.%F{red}%n%f.%F{cyan}%n%f$host)%F{$color})%f"
 
   local git_block='${git_info:+${(e)git_info[prompt]}}'
 
   local virtualenv_block='${python_info[virtualenv]}'
 
+  local dir_block='%F{$color}[%f${_cur_dir}%F{$color}]─%f'
+
   # Define prompts
   _left_header="${time_block}${host_block}${virtualenv_block}${git_block}"
-  _right_header='${_cur_dir}'
+  _right_header="${dir_block}"
   PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
