@@ -25,7 +25,7 @@ prompt_dir_color='33'   # brighter light blue
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
 
-function prepare_header {
+prepare_header() {
   # do all substitutions and expansions
   local left=${(e)_left_header}
   local right=${(e)_right_header}
@@ -40,12 +40,12 @@ function prepare_header {
   _filler_width=$(( $COLUMNS - $left_width - $right_width ))
 }
 
-function prompt_bryndin_precmd {
-  function prepare_full_pwd {
+prompt_bryndin_precmd() {
+  prepare_full_pwd() {
     [[ -w $PWD ]] && print -n '%d' || print -n '%F{red}%d%f'
   }
 
-  function prepare_compressed_pwd {
+  prepare_compressed_pwd() {
     local pwd="${PWD/#$HOME/~}"
 
     if [[ "$pwd" == (#m)[/~] ]]; then
@@ -57,15 +57,12 @@ function prompt_bryndin_precmd {
   }
 
   setopt LOCAL_OPTIONS
-  unsetopt XTRACE KSH_ARRAYS
 
   # Format PWD.
   _cur_dir="$(prepare_full_pwd)"
 
   # Get Git repository information.
-  if (( $+functions[git-info] )); then
-    git-info
-  fi
+  (( $+functions[git-info] )) && git-info
 
   # Get Virtualenv information. 
   python-info
