@@ -17,11 +17,11 @@
 #   http://i.imgur.com/b2M5eOw.png?1
 #
 
-prompt_color="cyan"
-prompt_time_color="27"
-prompt_host_color="27"
-prompt_virtualenv_color="yellow"
-prompt_dir_color="33"
+prompt_color='cyan'
+prompt_time_color='27'  # light blue
+prompt_host_color='27'  # light blue
+prompt_virtualenv_color='yellow'
+prompt_dir_color='33'   # brighter light blue
 
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
