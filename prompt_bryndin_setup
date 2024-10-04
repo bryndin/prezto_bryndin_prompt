@@ -1,14 +1,13 @@
-#
-# My custom 2 line prompt
+# My custom 2-line prompt
 #
 # Features:
-#   - full terminal width top line to visually separate different runs
-#   - current time
-#   - current user
-#   - host (only shown on remote machines)
-#   - active pythons virtualenv
-#   - git info
-#   - current dir (automatically falls back to shortened version if too long)
+#   - Full terminal width top line to visually separate different runs
+#   - Current time
+#   - Current user
+#   - Host (only shown on remote machines)
+#   - Active Python virtualenv
+#   - Git info
+#   - Current directory (shortened if too long)
 #
 # Authors:
 #   Dmitry Bryndin <bryndin@gmail.com>
