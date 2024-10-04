@@ -38,7 +38,7 @@ function prepare_header {
   local left_width=${#${(S%%)left//$~zero/}}
   local right_width=${#${(S%%)right//$~zero/}}
 
-  _filler_width=$(( $COLUMNS - 1 - $left_width - $right_width ))
+  _filler_width=$(( $COLUMNS - $left_width - $right_width ))
 }
 
 function prompt_bryndin_precmd {
@@ -77,7 +77,7 @@ function prompt_bryndin_precmd {
   local filler=""
   # fallback to compressed PWD if blocks aren't fitting
   [[ _filler_width -lt 0 ]] && _cur_dir="$(prepare_compressed_pwd)" && prepare_header
-  [[ _filler_width -gt 0 ]] && for x ({0..${_filler_width}}) filler+='─'
+  [[ _filler_width -gt 0 ]] && filler="${(l:${_filler_width}::─:)}"
 
   # print with expansion
   print -P ${_left_header}%F{$prompt_color}${filler}%f${_right_header}
