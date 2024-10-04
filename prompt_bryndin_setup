@@ -80,7 +80,7 @@ function prompt_bryndin_precmd {
   [[ _filler_width -gt 0 ]] && filler="${(l:${_filler_width}::─:)}"
 
   # print with expansion
-  print -P ${_left_header}%F{$prompt_color}${filler}%f${_right_header}
+  print -P "${_left_header}%F{$prompt_color}${filler}%f${_right_header}"
 }
 
 function prompt_bryndin_setup {
