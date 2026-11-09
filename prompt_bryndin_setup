@@ -397,6 +397,41 @@ function prompt_bryndin_line_pre_redraw {
   prompt_bryndin_reflow
 }
 
+#
+# Preview used by `prompt -p bryndin'.
+#
+function prompt_bryndin_preview {
+  local +h PROMPT='' RPROMPT='' SPROMPT=''
+  (( $+functions[editor-info] )) && editor-info 2>/dev/null
+  (( $+functions[prompt_preview_theme] )) && prompt_preview_theme 'bryndin' "$@"
+}
+
+#
+# Release everything the theme owns when another theme is selected.  promptinit
+# removes prompt_*_precmd/preexec hooks by name, but not our zle hook, async
+# worker, globals or zstyles.
+#
+function prompt_bryndin_teardown {
+  emulate -L zsh
+  if (( $+functions[add-zsh-hook] )); then
+    add-zsh-hook -d precmd prompt_bryndin_precmd
+    add-zsh-hook -d preexec prompt_bryndin_preexec
+  fi
+  (( $+functions[add-zle-hook-widget] )) && \
+    add-zle-hook-widget -d line-pre-redraw prompt_bryndin_line_pre_redraw
+  (( $+functions[async_stop_worker] )) && async_stop_worker prompt_bryndin 2>/dev/null
+
+  unset _prompt_bryndin_conf _prompt_bryndin_fg _prompt_bryndin_blocks \
+    _prompt_bryndin_color _prompt_bryndin_time_color _prompt_bryndin_host_color \
+    _prompt_bryndin_virtualenv_color _prompt_bryndin_dir_color \
+    _prompt_bryndin_left _prompt_bryndin_right _prompt_bryndin_left_expanded \
+    _prompt_bryndin_right_expanded _prompt_bryndin_header _prompt_bryndin_cur_dir \
+    _prompt_bryndin_filler_width _prompt_bryndin_overflow _prompt_bryndin_monochrome \
+    _prompt_bryndin_cmd_start _prompt_bryndin_duration_text \
+    _prompt_bryndin_git _prompt_bryndin_async
+  zstyle -d ':prezto:module:prompt' managed
+}
+
 function prompt_bryndin_setup {
   setopt LOCAL_OPTIONS
   unsetopt XTRACE KSH_ARRAYS
@@ -437,6 +472,8 @@ function prompt_bryndin_setup {
   # Required for the editor module to populate editor_info (see
   # modules/prompt/README.md): without it the second prompt line is empty.
   zstyle ':prezto:module:prompt' managed 'yes'
+  (( $+functions[prompt_cleanup] )) && \
+    prompt_cleanup 'prompt_bryndin_teardown' 2>/dev/null
 
   # Set editor-info parameters.
   zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
