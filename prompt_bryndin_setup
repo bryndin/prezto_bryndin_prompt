@@ -432,6 +432,15 @@ function prompt_bryndin_setup {
   fi
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
+  # Last command status on the right of the input line.  The numeric code is
+  # opt-in through the framework-wide show-return-val style.
+  RPROMPT=''
+  if [[ $_prompt_bryndin_conf[exit-status] == yes ]]; then
+    local code=''
+    [[ $_prompt_bryndin_conf[show-return-code] == yes ]] && code='%? '
+    RPROMPT="%(?..${_prompt_bryndin_fg[error-color]}✘ ${code}${_prompt_bryndin_fg[reset]})"
+  fi
+
   # The python module already exports VIRTUAL_ENV_DISABLE_PROMPT=20 to keep
   # virtualenv from printing its own prompt.  Do not clobber that value: pure
   # and other themes use it as a sentinel.
