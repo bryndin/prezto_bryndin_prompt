@@ -69,8 +69,9 @@ function prompt_bryndin_precmd {
   # Get Git repository information.
   (( $+functions[git-info] )) && git-info
 
-  # Get Virtualenv information. 
-  python-info
+  # Get Virtualenv information. The python module returns early when no Python
+  # interpreter is installed, so python-info may not exist.
+  (( $+functions[python-info] )) && python-info
 
   # Prepare header line
   prompt_bryndin_prepare_header
