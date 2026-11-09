@@ -41,13 +41,22 @@ function prompt_bryndin_prepare_compressed_pwd {
   setopt LOCAL_OPTIONS EXTENDED_GLOB
   local pwd="${PWD/#$HOME/~}"
 
+  local text
   if [[ "$pwd" == (#m)[/~] ]]; then
-    print -n -- "$MATCH"
+    text="$MATCH"
     unset MATCH
   else
     # The result is inserted into a prompt string, so escape any literal '%'
     # in directory names before print -P interprets it as a prompt escape.
-    print -n -- "${${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}//\%/%%}/${${pwd:t}//\%/%%}"
+    text="${${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}//\%/%%}/${${pwd:t}//\%/%%}"
+  fi
+
+  # Keep the "no write permission" highlight in the compressed representation
+  # too; otherwise the feature silently disappears on long paths.
+  if [[ -w $PWD ]]; then
+    print -n -- "$text"
+  else
+    print -n -- "%F{red}${text}%f"
   fi
 }
 
