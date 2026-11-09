@@ -95,6 +95,10 @@ function prompt_bryndin_setup {
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_bryndin_precmd
 
+  # Required for the editor module to populate editor_info (see
+  # modules/prompt/README.md): without it the second prompt line is empty.
+  zstyle ':prezto:module:prompt' managed 'yes'
+
   # Set editor-info parameters.
   zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
   zstyle ':prezto:module:editor:info:keymap:primary' format '%B%F{red}❯%F{yellow}❯%F{green}❯%f%b'
