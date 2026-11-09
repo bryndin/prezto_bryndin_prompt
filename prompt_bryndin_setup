@@ -42,10 +42,12 @@ function prompt_bryndin_prepare_compressed_pwd {
   local pwd="${PWD/#$HOME/~}"
 
   if [[ "$pwd" == (#m)[/~] ]]; then
-    print -n "$MATCH"
+    print -n -- "$MATCH"
     unset MATCH
   else
-    print -n "${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
+    # The result is inserted into a prompt string, so escape any literal '%'
+    # in directory names before print -P interprets it as a prompt escape.
+    print -n -- "${${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}//\%/%%}/${${pwd:t}//\%/%%}"
   fi
 }
 
