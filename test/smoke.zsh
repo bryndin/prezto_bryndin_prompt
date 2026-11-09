@@ -145,7 +145,7 @@ done
 if (( $#failures )); then
   print -u2 "FAIL:"
   for line in $failures; do print -u2 "  - $line"; done
-  print -u2 "--- rendered ---"
+  print -u2 -- "--- rendered ---"
   print -u2 -- "$output"
   exit 1
 fi

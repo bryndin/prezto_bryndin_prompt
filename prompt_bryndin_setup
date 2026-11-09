@@ -26,6 +26,9 @@ typeset -g  _prompt_bryndin_virtualenv_color=''
 typeset -g  _prompt_bryndin_dir_color=''
 typeset -g  _prompt_bryndin_left=''
 typeset -g  _prompt_bryndin_right=''
+typeset -g  _prompt_bryndin_left_expanded=''
+typeset -g  _prompt_bryndin_right_expanded=''
+typeset -g  _prompt_bryndin_header=''
 typeset -g  _prompt_bryndin_cur_dir=''
 typeset -g  _prompt_bryndin_filler_width=0
 typeset -g  _prompt_bryndin_overflow=0
@@ -121,15 +124,14 @@ function prompt_bryndin_prepare_compressed_pwd {
   fi
 }
 
-function prompt_bryndin_prepare_header {
-  # do all substitutions and expansions
-  local left=${(e)_prompt_bryndin_left}
-  local right=${(e)_prompt_bryndin_right}
-
-  # Pattern listing visual modifiers
-  local zero='%([BSUbfksu]|([FB]|){*})'
-
-  # remove non-printable prompt_color characters to compute length correctly
+#
+# Compute the visible width of two already-expanded prompt strings and derive
+# the filler width.  Zero-width prompt escapes are stripped first.
+#
+function prompt_bryndin_measure {
+  emulate -L zsh
+  local left=$1 right=$2
+  local zero='%([BSUbfksu]|([FBK]|){*})'
   local left_width=${#${(S%%)left//$~zero/}}
   local right_width=${#${(S%%)right//$~zero/}}
 
@@ -139,6 +141,38 @@ function prompt_bryndin_prepare_header {
   local width=$(( $COLUMNS - $left_width - $right_width ))
   _prompt_bryndin_filler_width=$(( width > 0 ? width : 0 ))
   _prompt_bryndin_overflow=$(( width < 0 ? -width : 0 ))
+}
+
+function prompt_bryndin_prepare_header {
+  # Expand the deferred ${...} blocks exactly once and cache the result.
+  local left=${(e)_prompt_bryndin_left}
+  local right=${(e)_prompt_bryndin_right}
+  _prompt_bryndin_left_expanded=$left
+  _prompt_bryndin_right_expanded=$right
+  prompt_bryndin_measure "$left" "$right"
+}
+
+#
+# Build the header string from the cached blocks.  This is cheap and can be
+# called again on a redraw (e.g. after a terminal resize) without re-running
+# git-info or re-evaluating the block templates.
+#
+function prompt_bryndin_reflow {
+  emulate -L zsh
+  prompt_bryndin_measure "$_prompt_bryndin_left_expanded" "$_prompt_bryndin_right_expanded"
+
+  # Repeat the separator to fill the available display columns.  A plain loop
+  # (rather than ${(l:...:)}) keeps the separator configurable and lets us
+  # account for double-width glyphs.
+  local sep=${_prompt_bryndin_conf[separator]}
+  local sep_escaped=${sep//\%/%%}
+  local sep_width=${(m)#sep}
+  (( sep_width < 1 )) && sep_width=1
+  local count=$(( _prompt_bryndin_filler_width / sep_width ))
+  local filler='' i
+  for (( i = 0; i < count; i++ )); do filler+=$sep_escaped; done
+  local sep_color=${_prompt_bryndin_conf[separator-color]:-$_prompt_bryndin_conf[color]}
+  _prompt_bryndin_header="${_prompt_bryndin_left_expanded}%F{${sep_color}}${filler}%f${_prompt_bryndin_right_expanded}"
 }
 
 function prompt_bryndin_precmd {
@@ -157,14 +191,13 @@ function prompt_bryndin_precmd {
   # Prepare header line
   prompt_bryndin_prepare_header
 
-  local filler=""
   # fallback to compressed PWD if blocks aren't fitting
   (( _prompt_bryndin_overflow > 0 )) && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
-  local sep=${_prompt_bryndin_conf[separator]//\%/%%}
-  (( _prompt_bryndin_filler_width > 0 )) && filler="${(l:${_prompt_bryndin_filler_width}::${sep}:)}"
 
-  # print with expansion
-  print -P "${_prompt_bryndin_left}%F{$_prompt_bryndin_color}${filler}%f${_prompt_bryndin_right}"
+  # Store the finished header as prompt text.  It is rendered as part of
+  # PROMPT rather than printed by precmd, so it survives clear-screen,
+  # reset-prompt, vi keymap switches and terminal resizes.
+  prompt_bryndin_reflow
 }
 
 function prompt_bryndin_setup {
@@ -239,6 +272,13 @@ function prompt_bryndin_setup {
   done
   _prompt_bryndin_right="${dir_block}"
   PROMPT='%(!. %B%F{red}#%f%b.)${editor_info[keymap]}'
+
+  # Prepend the header.  Keeping it inside PROMPT (instead of printing it from
+  # precmd) means zle redraws reproduce it.  `single-line' drops it entirely.
+  if [[ $_prompt_bryndin_conf[single-line] != yes ]]; then
+    local newline="${prompt_newline:-$'\n'}"
+    PROMPT='${_prompt_bryndin_header}'"${newline}"$PROMPT
+  fi
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
   # The python module already exports VIRTUAL_ENV_DISABLE_PROMPT=20 to keep
