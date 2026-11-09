@@ -26,6 +26,7 @@ typeset -g  _prompt_bryndin_left=''
 typeset -g  _prompt_bryndin_right=''
 typeset -g  _prompt_bryndin_cur_dir=''
 typeset -g  _prompt_bryndin_filler_width=0
+typeset -g  _prompt_bryndin_overflow=0
 
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
@@ -57,7 +58,12 @@ function prompt_bryndin_prepare_header {
   local left_width=${#${(S%%)left//$~zero/}}
   local right_width=${#${(S%%)right//$~zero/}}
 
-  _prompt_bryndin_filler_width=$(( $COLUMNS - $left_width - $right_width ))
+  # Never produce a negative filler (which would make the padding expression
+  # fail and leave the header wider than the terminal).  Track the overflow
+  # separately: it drives the compressed-PWD fallback and block clipping.
+  local width=$(( $COLUMNS - $left_width - $right_width ))
+  _prompt_bryndin_filler_width=$(( width > 0 ? width : 0 ))
+  _prompt_bryndin_overflow=$(( width < 0 ? -width : 0 ))
 }
 
 function prompt_bryndin_precmd {
@@ -78,7 +84,7 @@ function prompt_bryndin_precmd {
 
   local filler=""
   # fallback to compressed PWD if blocks aren't fitting
-  (( _prompt_bryndin_filler_width < 0 )) && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
+  (( _prompt_bryndin_overflow > 0 )) && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
   (( _prompt_bryndin_filler_width > 0 )) && filler="${(l:${_prompt_bryndin_filler_width}::─:)}"
 
   # print with expansion
