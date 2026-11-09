@@ -169,36 +169,73 @@ function prompt_bryndin_clip {
 }
 
 function prompt_bryndin_prepare_full_pwd {
-  [[ -w $PWD ]] && print -n '%d' || print -n '%F{red}%d%f'
+  # %~ abbreviates $HOME, matching the compressed representation.  It is a
+  # prompt escape, so zsh resolves it at draw time and prompt_bryndin_measure
+  # expands it when computing the width.
+  [[ -w $PWD ]] && print -n -- '%~' || print -n -- '%F{red}%~%f'
+}
+
+#
+# Is Prezto's prompt-pwd helper actually available?  autoload marks a function
+# as defined even when its file is missing, so check fpath explicitly.
+#
+function prompt_bryndin_has_prompt_pwd {
+  emulate -L zsh
+  local dir
+  for dir in $fpath; do
+    [[ -r $dir/prompt-pwd ]] && return 0
+  done
+  return 1
+}
+
+#
+# Produce the (%-escaped, clipped) directory text for the compressed header.
+# `pwd' selects the strategy; the default delegates to Prezto's prompt-pwd,
+# which honours the framework-wide ':prezto:module:prompt' pwd-length style.
+#
+function prompt_bryndin_pwd_text {
+  emulate -L zsh
+  setopt EXTENDED_GLOB
+  local style=$_prompt_bryndin_conf[pwd]
+  local text
+
+  case $style in
+    full)
+      text=$PWD
+      ;;
+    tilde)
+      text=${PWD/#$HOME/\~}
+      ;;
+    *)
+      if prompt_bryndin_has_prompt_pwd; then
+        text=$(prompt-pwd)
+        text=${text//\%\%/\%}   # prompt-pwd escapes '%' for prompt strings
+      else
+        local pwd="${PWD/#$HOME/~}"
+        if [[ "$pwd" == (#m)[/~] ]]; then
+          text="$MATCH"
+          unset MATCH
+        else
+          text="${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
+        fi
+      fi
+      ;;
+  esac
+
+  local max=$_prompt_bryndin_conf[max-block-width]
+  (( max > 0 )) && text=$(prompt_bryndin_clip "$text" "$max")
+  print -rn -- "${text//\%/%%}"
 }
 
 function prompt_bryndin_prepare_compressed_pwd {
-  # '##.#?' and '(#m)' are extended-glob constructs.  Do not rely on a Prezto
-  # module happening to set EXTENDED_GLOB globally.
-  setopt LOCAL_OPTIONS EXTENDED_GLOB
-  local pwd="${PWD/#$HOME/~}"
-
-  local plain
-  if [[ "$pwd" == (#m)[/~] ]]; then
-    plain="$MATCH"
-    unset MATCH
-  else
-    plain="${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
-  fi
-
-  local max=$_prompt_bryndin_conf[max-block-width]
-  (( max > 0 )) && plain=$(prompt_bryndin_clip "$plain" "$max")
-
-  # The result is inserted into a prompt string, so escape any literal '%'
-  # in directory names before prompt expansion interprets it.
-  local text=${plain//\%/%%}
+  local text=$(prompt_bryndin_pwd_text)
 
   # Keep the "no write permission" highlight in the compressed representation
   # too; otherwise the feature silently disappears on long paths.
   if [[ -w $PWD ]]; then
-    print -n -- "$text"
+    print -rn -- "$text"
   else
-    print -n -- "%F{red}${text}%f"
+    print -rn -- "%F{red}${text}%f"
   fi
 }
 
@@ -297,6 +334,7 @@ function prompt_bryndin_setup {
 
   # Load required functions.
   autoload -Uz add-zsh-hook add-zle-hook-widget
+  prompt_bryndin_has_prompt_pwd && autoload -Uz prompt-pwd
 
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_bryndin_precmd
