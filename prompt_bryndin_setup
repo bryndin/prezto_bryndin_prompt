@@ -200,16 +200,28 @@ function prompt_bryndin_precmd {
   prompt_bryndin_reflow
 }
 
+#
+# Recompute the filler before every prompt redraw.  precmd is not re-run by
+# clear-screen, reset-prompt, vi keymap switches or SIGWINCH, so without this
+# the header would keep a stale width after a terminal resize.
+#
+function prompt_bryndin_line_pre_redraw {
+  emulate -L zsh
+  [[ -n $_prompt_bryndin_header ]] || return 0
+  prompt_bryndin_reflow
+}
+
 function prompt_bryndin_setup {
   setopt LOCAL_OPTIONS
   unsetopt XTRACE KSH_ARRAYS
   prompt_opts=(cr percent sp subst)
 
   # Load required functions.
-  autoload -Uz add-zsh-hook
+  autoload -Uz add-zsh-hook add-zle-hook-widget
 
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_bryndin_precmd
+  add-zle-hook-widget line-pre-redraw prompt_bryndin_line_pre_redraw
 
   # Required for the editor module to populate editor_info (see
   # modules/prompt/README.md): without it the second prompt line is empty.
