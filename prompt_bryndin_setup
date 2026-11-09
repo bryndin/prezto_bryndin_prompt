@@ -36,6 +36,9 @@ function prompt_bryndin_prepare_full_pwd {
 }
 
 function prompt_bryndin_prepare_compressed_pwd {
+  # '##.#?' and '(#m)' are extended-glob constructs.  Do not rely on a Prezto
+  # module happening to set EXTENDED_GLOB globally.
+  setopt LOCAL_OPTIONS EXTENDED_GLOB
   local pwd="${PWD/#$HOME/~}"
 
   if [[ "$pwd" == (#m)[/~] ]]; then
@@ -67,7 +70,7 @@ function prompt_bryndin_prepare_header {
 }
 
 function prompt_bryndin_precmd {
-  setopt LOCAL_OPTIONS
+  setopt LOCAL_OPTIONS EXTENDED_GLOB
 
   # Format PWD.
   _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_full_pwd)"
