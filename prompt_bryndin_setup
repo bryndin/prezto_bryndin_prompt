@@ -168,6 +168,22 @@ function prompt_bryndin_clip {
   print -rn -- "${out}…"
 }
 
+#
+# Decide whether to show the hostname.  `auto' detects SSH (via any of the
+# variables different sshd versions set) and su/sudo to another account.
+#
+function prompt_bryndin_is_remote {
+  emulate -L zsh
+  case $_prompt_bryndin_conf[host] in
+    yes|always) return 0 ;;
+    no|never)   return 1 ;;
+  esac
+  [[ -n $SSH_TTY || -n $SSH_CLIENT || -n $SSH_CONNECTION ]] && return 0
+  local login=${$(command logname 2>/dev/null):-$USER}
+  [[ -n $login && $login != $USER ]] && return 0
+  return 1
+}
+
 function prompt_bryndin_prepare_full_pwd {
   # %~ abbreviates $HOME, matching the compressed representation.  It is a
   # prompt escape, so zsh resolves it at draw time and prompt_bryndin_measure
@@ -330,6 +346,9 @@ function prompt_bryndin_setup {
   unsetopt XTRACE KSH_ARRAYS
   prompt_opts=(cr percent sp subst)
 
+  # Re-read styles on every setup so `prompt bryndin' (and previews) pick up
+  # changes made after the theme was first sourced.
+  prompt_bryndin_load_config
   prompt_bryndin_build_colors
 
   # Load required functions.
@@ -382,7 +401,7 @@ function prompt_bryndin_setup {
   local time_block="${main_fg}─(${_prompt_bryndin_fg[time-color]}${time}${main_fg})${reset_fg}"
 
   local host=''
-  [[ -n $SSH_CLIENT ]] && host="${_prompt_bryndin_fg[host-color]}@%m${reset_fg}"
+  prompt_bryndin_is_remote && host="${_prompt_bryndin_fg[host-color]}@%m${reset_fg}"
   local host_block="${main_fg}─(${reset_fg}%(!.${_prompt_bryndin_fg[error-color]}%n${reset_fg}.${_prompt_bryndin_fg[host-color]}%n${reset_fg}$host)${main_fg})${reset_fg}"
 
   local git_block='${git_info:+${(e)git_info[prompt]}}'
