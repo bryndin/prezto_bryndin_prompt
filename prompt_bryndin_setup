@@ -146,6 +146,28 @@ function prompt_bryndin_build_colors {
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
 
+#
+# Clip plain text to N display columns, appending an ellipsis.  ${#...} counts
+# characters, not terminal columns, so wide (e.g. CJK) glyphs are measured
+# with ${(m)#...} instead.
+#
+function prompt_bryndin_clip {
+  emulate -L zsh
+  local text=$1 max=$2
+  (( max <= 0 )) && { print -rn -- "$text"; return 0 }
+  (( ${(m)#text} <= max )) && { print -rn -- "$text"; return 0 }
+
+  local -a chars=( ${(s::)text} )
+  local out='' c width=0 cw
+  for c in $chars; do
+    cw=${(m)#c}
+    (( width + cw > max - 1 )) && break
+    out+=$c
+    (( width += cw ))
+  done
+  print -rn -- "${out}…"
+}
+
 function prompt_bryndin_prepare_full_pwd {
   [[ -w $PWD ]] && print -n '%d' || print -n '%F{red}%d%f'
 }
@@ -156,15 +178,20 @@ function prompt_bryndin_prepare_compressed_pwd {
   setopt LOCAL_OPTIONS EXTENDED_GLOB
   local pwd="${PWD/#$HOME/~}"
 
-  local text
+  local plain
   if [[ "$pwd" == (#m)[/~] ]]; then
-    text="$MATCH"
+    plain="$MATCH"
     unset MATCH
   else
-    # The result is inserted into a prompt string, so escape any literal '%'
-    # in directory names before print -P interprets it as a prompt escape.
-    text="${${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}//\%/%%}/${${pwd:t}//\%/%%}"
+    plain="${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
   fi
+
+  local max=$_prompt_bryndin_conf[max-block-width]
+  (( max > 0 )) && plain=$(prompt_bryndin_clip "$plain" "$max")
+
+  # The result is inserted into a prompt string, so escape any literal '%'
+  # in directory names before prompt expansion interprets it.
+  local text=${plain//\%/%%}
 
   # Keep the "no write permission" highlight in the compressed representation
   # too; otherwise the feature silently disappears on long paths.
@@ -183,8 +210,8 @@ function prompt_bryndin_measure {
   emulate -L zsh
   local left=$1 right=$2
   local zero='%([BSUbfksu]|([FBK]|){*})'
-  local left_width=${#${(S%%)left//$~zero/}}
-  local right_width=${#${(S%%)right//$~zero/}}
+  local left_width=${(m)#${(S%%)left//$~zero/}}
+  local right_width=${(m)#${(S%%)right//$~zero/}}
 
   # Never produce a negative filler (which would make the padding expression
   # fail and leave the header wider than the terminal).  Track the overflow
