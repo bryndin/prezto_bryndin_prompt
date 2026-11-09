@@ -143,7 +143,7 @@ function prompt_bryndin_setup {
   # Define prompts
   _prompt_bryndin_left="${time_block}${host_block}${virtualenv_block}${git_block}"
   _prompt_bryndin_right="${dir_block}"
-  PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
+  PROMPT='%(!. %B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
   # Disable VirtualEnv prompt
