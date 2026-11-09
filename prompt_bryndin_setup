@@ -16,19 +16,39 @@
 #   http://i.imgur.com/b2M5eOw.png?1
 #
 
-prompt_color='cyan'
-prompt_time_color='27'  # light blue
-prompt_host_color='27'  # light blue
-prompt_virtualenv_color='yellow'
-prompt_dir_color='33'   # brighter light blue
+# All internal state is namespaced so switching themes cannot leak globals.
+typeset -g  _prompt_bryndin_color='cyan'
+typeset -g  _prompt_bryndin_time_color='27'   # light blue
+typeset -g  _prompt_bryndin_host_color='27'   # light blue
+typeset -g  _prompt_bryndin_virtualenv_color='yellow'
+typeset -g  _prompt_bryndin_dir_color='33'    # brighter light blue
+typeset -g  _prompt_bryndin_left=''
+typeset -g  _prompt_bryndin_right=''
+typeset -g  _prompt_bryndin_cur_dir=''
+typeset -g  _prompt_bryndin_filler_width=0
 
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
 
-prepare_header() {
+function prompt_bryndin_prepare_full_pwd {
+  [[ -w $PWD ]] && print -n '%d' || print -n '%F{red}%d%f'
+}
+
+function prompt_bryndin_prepare_compressed_pwd {
+  local pwd="${PWD/#$HOME/~}"
+
+  if [[ "$pwd" == (#m)[/~] ]]; then
+    print -n "$MATCH"
+    unset MATCH
+  else
+    print -n "${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
+  fi
+}
+
+function prompt_bryndin_prepare_header {
   # do all substitutions and expansions
-  local left=${(e)_left_header}
-  local right=${(e)_right_header}
+  local left=${(e)_prompt_bryndin_left}
+  local right=${(e)_prompt_bryndin_right}
 
   # Pattern listing visual modifiers
   local zero='%([BSUbfksu]|([FB]|){*})'
@@ -37,29 +57,14 @@ prepare_header() {
   local left_width=${#${(S%%)left//$~zero/}}
   local right_width=${#${(S%%)right//$~zero/}}
 
-  _filler_width=$(( $COLUMNS - $left_width - $right_width ))
+  _prompt_bryndin_filler_width=$(( $COLUMNS - $left_width - $right_width ))
 }
 
-prompt_bryndin_precmd() {
-  prepare_full_pwd() {
-    [[ -w $PWD ]] && print -n '%d' || print -n '%F{red}%d%f'
-  }
-
-  prepare_compressed_pwd() {
-    local pwd="${PWD/#$HOME/~}"
-
-    if [[ "$pwd" == (#m)[/~] ]]; then
-      print -n "$MATCH"
-      unset MATCH
-    else
-      print -n "${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
-    fi
-  }
-
+function prompt_bryndin_precmd {
   setopt LOCAL_OPTIONS
 
   # Format PWD.
-  _cur_dir="$(prepare_full_pwd)"
+  _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_full_pwd)"
 
   # Get Git repository information.
   (( $+functions[git-info] )) && git-info
@@ -68,15 +73,15 @@ prompt_bryndin_precmd() {
   python-info
 
   # Prepare header line
-  prepare_header
+  prompt_bryndin_prepare_header
 
   local filler=""
   # fallback to compressed PWD if blocks aren't fitting
-  [[ _filler_width -lt 0 ]] && _cur_dir="$(prepare_compressed_pwd)" && prepare_header
-  [[ _filler_width -gt 0 ]] && filler="${(l:${_filler_width}::─:)}"
+  [[ _prompt_bryndin_filler_width -lt 0 ]] && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
+  [[ _prompt_bryndin_filler_width -gt 0 ]] && filler="${(l:${_prompt_bryndin_filler_width}::─:)}"
 
   # print with expansion
-  print -P "${_left_header}%F{$prompt_color}${filler}%f${_right_header}"
+  print -P "${_prompt_bryndin_left}%F{$_prompt_bryndin_color}${filler}%f${_prompt_bryndin_right}"
 }
 
 function prompt_bryndin_setup {
@@ -112,28 +117,28 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
   zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
   zstyle ':prezto:module:git:info:keys' format \
-    'prompt' "%F{$prompt_color}─(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u%F{$prompt_color})%f"
+    'prompt' "%F{$_prompt_bryndin_color}─(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u%F{$_prompt_bryndin_color})%f"
 
   # Set python-info (virtualenv) parameters. 
-  zstyle ':prezto:module:python:info:virtualenv' format "%F{$prompt_color}─<%F{$prompt_virtualenv_color}%v%F{$prompt_color}>%f"
+  zstyle ':prezto:module:python:info:virtualenv' format "%F{$_prompt_bryndin_color}─<%F{$_prompt_bryndin_virtualenv_color}%v%F{$_prompt_bryndin_color}>%f"
 
   ### Header blocks
   local time='%T'
-  local time_block="%F{$prompt_color}─(%F{$prompt_time_color}${time}%F{$prompt_color})%f"
+  local time_block="%F{$_prompt_bryndin_color}─(%F{$_prompt_bryndin_time_color}${time}%F{$_prompt_bryndin_color})%f"
 
   local host=''
-  [[ -n $SSH_CLIENT ]] && host='%F{$prompt_host_color}@%m%f'
-  local host_block="%F{$prompt_color}─(%f%(!.%F{red}%n%f.%F{$prompt_host_color}%n%f$host)%F{$prompt_color})%f"
+  [[ -n $SSH_CLIENT ]] && host='%F{$_prompt_bryndin_host_color}@%m%f'
+  local host_block="%F{$_prompt_bryndin_color}─(%f%(!.%F{red}%n%f.%F{$_prompt_bryndin_host_color}%n%f$host)%F{$_prompt_bryndin_color})%f"
 
   local git_block='${git_info:+${(e)git_info[prompt]}}'
 
   local virtualenv_block='${python_info[virtualenv]}'
 
-  local dir_block='%F{$prompt_color}[%F{$prompt_dir_color}${_cur_dir}%F{$prompt_color}]─%f'
+  local dir_block='%F{$_prompt_bryndin_color}[%F{$_prompt_bryndin_dir_color}${_prompt_bryndin_cur_dir}%F{$_prompt_bryndin_color}]─%f'
 
   # Define prompts
-  _left_header="${time_block}${host_block}${virtualenv_block}${git_block}"
-  _right_header="${dir_block}"
+  _prompt_bryndin_left="${time_block}${host_block}${virtualenv_block}${git_block}"
+  _prompt_bryndin_right="${dir_block}"
   PROMPT='%(!. %    B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
 
