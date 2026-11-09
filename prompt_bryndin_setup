@@ -17,16 +17,77 @@
 #
 
 # All internal state is namespaced so switching themes cannot leak globals.
-typeset -g  _prompt_bryndin_color='cyan'
-typeset -g  _prompt_bryndin_time_color='27'   # light blue
-typeset -g  _prompt_bryndin_host_color='27'   # light blue
-typeset -g  _prompt_bryndin_virtualenv_color='yellow'
-typeset -g  _prompt_bryndin_dir_color='33'    # brighter light blue
+typeset -gA _prompt_bryndin_conf
+typeset -ga _prompt_bryndin_blocks
+typeset -g  _prompt_bryndin_color=''
+typeset -g  _prompt_bryndin_time_color=''
+typeset -g  _prompt_bryndin_host_color=''
+typeset -g  _prompt_bryndin_virtualenv_color=''
+typeset -g  _prompt_bryndin_dir_color=''
 typeset -g  _prompt_bryndin_left=''
 typeset -g  _prompt_bryndin_right=''
 typeset -g  _prompt_bryndin_cur_dir=''
 typeset -g  _prompt_bryndin_filler_width=0
 typeset -g  _prompt_bryndin_overflow=0
+
+#
+# Every option is a zstyle under ':prezto:module:prompt:bryndin'.  Defaults are
+# declared here and overridden from .zpreztorc, so users never need to edit the
+# theme file.  See README.md for the full list.
+#
+function prompt_bryndin_load_config {
+  emulate -L zsh
+  _prompt_bryndin_conf=(
+    color             'cyan'
+    time-color        '27'
+    host-color        '27'
+    virtualenv-color  'yellow'
+    dir-color         '33'
+    git-color         'blue'
+    error-color       'red'
+    separator         '─'
+    separator-color   ''
+    time-format       '%T'
+    host              'auto'
+    pwd               'prompt-pwd'
+    colors            'auto'
+    max-block-width   '0'
+    async             'no'
+    exit-status       'yes'
+    jobs              'yes'
+    history           'no'
+    duration          'no'
+    vim               'yes'
+    overwrite         'yes'
+    single-line       'no'
+    show-return-code  'no'
+  )
+
+  local key value
+  for key in ${(k)_prompt_bryndin_conf}; do
+    value=''
+    zstyle -s ":prezto:module:prompt:bryndin" "$key" value \
+      && _prompt_bryndin_conf[$key]="$value"
+  done
+
+  _prompt_bryndin_blocks=()
+  zstyle -a ':prezto:module:prompt:bryndin' blocks _prompt_bryndin_blocks \
+    || _prompt_bryndin_blocks=(time host virtualenv git)
+
+  # Honour the framework-wide style for printing the numeric exit code.
+  zstyle -t ':prezto:module:prompt' show-return-val \
+    && _prompt_bryndin_conf[show-return-code]='yes'
+
+  # Compatibility shim for the existing block builders; new code reads
+  # _prompt_bryndin_conf directly.
+  _prompt_bryndin_color=$_prompt_bryndin_conf[color]
+  _prompt_bryndin_time_color=$_prompt_bryndin_conf[time-color]
+  _prompt_bryndin_host_color=$_prompt_bryndin_conf[host-color]
+  _prompt_bryndin_virtualenv_color=$_prompt_bryndin_conf[virtualenv-color]
+  _prompt_bryndin_dir_color=$_prompt_bryndin_conf[dir-color]
+}
+
+prompt_bryndin_load_config
 
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
@@ -99,7 +160,8 @@ function prompt_bryndin_precmd {
   local filler=""
   # fallback to compressed PWD if blocks aren't fitting
   (( _prompt_bryndin_overflow > 0 )) && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
-  (( _prompt_bryndin_filler_width > 0 )) && filler="${(l:${_prompt_bryndin_filler_width}::─:)}"
+  local sep=${_prompt_bryndin_conf[separator]//\%/%%}
+  (( _prompt_bryndin_filler_width > 0 )) && filler="${(l:${_prompt_bryndin_filler_width}::${sep}:)}"
 
   # print with expansion
   print -P "${_prompt_bryndin_left}%F{$_prompt_bryndin_color}${filler}%f${_prompt_bryndin_right}"
@@ -151,7 +213,7 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:python:info:virtualenv' format "%F{$_prompt_bryndin_color}─<%F{$_prompt_bryndin_virtualenv_color}%v%F{$_prompt_bryndin_color}>%f"
 
   ### Header blocks
-  local time='%T'
+  local time="$_prompt_bryndin_conf[time-format]"
   local time_block="%F{$_prompt_bryndin_color}─(%F{$_prompt_bryndin_time_color}${time}%F{$_prompt_bryndin_color})%f"
 
   local host=''
@@ -164,8 +226,17 @@ function prompt_bryndin_setup {
 
   local dir_block='%F{$_prompt_bryndin_color}[%F{$_prompt_bryndin_dir_color}${_prompt_bryndin_cur_dir}%F{$_prompt_bryndin_color}]─%f'
 
-  # Define prompts
-  _prompt_bryndin_left="${time_block}${host_block}${virtualenv_block}${git_block}"
+  # Define prompts.  Blocks are selected (and ordered) by the `blocks` zstyle.
+  _prompt_bryndin_left=''
+  local block
+  for block in $_prompt_bryndin_blocks; do
+    case $block in
+      time)       _prompt_bryndin_left+=$time_block ;;
+      host)       _prompt_bryndin_left+=$host_block ;;
+      virtualenv) _prompt_bryndin_left+=$virtualenv_block ;;
+      git)        _prompt_bryndin_left+=$git_block ;;
+    esac
+  done
   _prompt_bryndin_right="${dir_block}"
   PROMPT='%(!. %B%F{red}#%f%b.)${editor_info[keymap]}'
   SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
