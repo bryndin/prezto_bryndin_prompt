@@ -29,6 +29,14 @@ prompt_bryndin_precmd
 [[ $_prompt_bryndin_header != *'%F{'* ]] || {
   print -u2 "FAIL: header still contains %F escapes: $_prompt_bryndin_header"; exit 1
 }
+[[ $SPROMPT != *'%F{'* ]] || {
+  print -u2 "FAIL: SPROMPT still contains %F escapes"; exit 1
+}
+local keymap
+zstyle -s ':prezto:module:editor:info:keymap:primary' format keymap
+[[ $keymap != *'%F{'* ]] || {
+  print -u2 "FAIL: editor keymap still contains %F escapes: $keymap"; exit 1
+}
 
 # --- 16-colour downgrade ---------------------------------------------------
 # Reload in a clean child so the earlier zstyles/variables do not leak.

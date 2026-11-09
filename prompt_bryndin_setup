@@ -99,6 +99,20 @@ function prompt_bryndin_load_config {
 
 prompt_bryndin_load_config
 
+# Colour escapes contributed by framework formats (git-info, editor-info).
+typeset -g _prompt_bryndin_color_pat='%([fk]|([FK]){*})'
+
+#
+# Remove colour escapes from a prompt string so monochrome mode also covers
+# text supplied by framework zstyles rather than built by this theme.
+#
+function prompt_bryndin_strip_colors {
+  emulate -L zsh
+  setopt EXTENDED_GLOB
+  local s=$1
+  print -rn -- "${(S)s//$~_prompt_bryndin_color_pat/}"
+}
+
 #
 # Resolve one configured colour spec into a %F{...} prompt escape, or into an
 # empty string when colours are disabled.  Numeric 256-colour indices are
@@ -158,11 +172,6 @@ typeset -gA git_info python_info editor_info
 pmodload 'helper' 'python' 'git'
 
 #
-# Clip plain text to N display columns, appending an ellipsis.  ${#...} counts
-# characters, not terminal columns, so wide (e.g. CJK) glyphs are measured
-# with ${(m)#...} instead.
-#
-#
 # Escape plain text for safe embedding in a prompt string.  '%' would
 # otherwise be interpreted as a prompt escape by the expansion pass; '$', '\'
 # and backticks are escaped too for defence in depth.  A character loop is used
@@ -197,6 +206,11 @@ function prompt_bryndin_prepare_virtualenv {
   print -rn -- "${_prompt_bryndin_fg[color]}─<${_prompt_bryndin_fg[virtualenv-color]}${safe}${_prompt_bryndin_fg[color]}>${_prompt_bryndin_fg[reset]}"
 }
 
+#
+# Clip plain text to N display columns, appending an ellipsis.  ${#...} counts
+# characters, not terminal columns, so wide (e.g. CJK) glyphs are measured
+# with ${(m)#...} instead.
+#
 function prompt_bryndin_clip {
   emulate -L zsh
   local text=$1 max=$2
@@ -234,7 +248,11 @@ function prompt_bryndin_prepare_full_pwd {
   # %~ abbreviates $HOME, matching the compressed representation.  It is a
   # prompt escape, so zsh resolves it at draw time and prompt_bryndin_measure
   # expands it when computing the width.
-  [[ -w $PWD ]] && print -n -- '%~' || print -n -- '%F{red}%~%f'
+  if [[ -w $PWD ]]; then
+    print -n -- '%~'
+  else
+    print -n -- "${_prompt_bryndin_fg[error-color]}%~${_prompt_bryndin_fg[reset]}"
+  fi
 }
 
 #
@@ -297,7 +315,7 @@ function prompt_bryndin_prepare_compressed_pwd {
   if [[ -w $PWD ]]; then
     print -rn -- "$text"
   else
-    print -rn -- "%F{red}${text}%f"
+    print -rn -- "${_prompt_bryndin_fg[error-color]}${text}${_prompt_bryndin_fg[reset]}"
   fi
 }
 
@@ -349,6 +367,8 @@ function prompt_bryndin_reflow {
   local filler='' i
   for (( i = 0; i < count; i++ )); do filler+=$sep_escaped; done
   _prompt_bryndin_header="${_prompt_bryndin_left_expanded}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${_prompt_bryndin_right_expanded}"
+  (( _prompt_bryndin_monochrome )) && \
+    _prompt_bryndin_header=$(prompt_bryndin_strip_colors "$_prompt_bryndin_header")
 }
 
 #
@@ -477,7 +497,8 @@ function prompt_bryndin_teardown {
     _prompt_bryndin_right_expanded _prompt_bryndin_header _prompt_bryndin_cur_dir \
     _prompt_bryndin_filler_width _prompt_bryndin_overflow _prompt_bryndin_monochrome \
     _prompt_bryndin_cmd_start _prompt_bryndin_duration_text \
-    _prompt_bryndin_git _prompt_bryndin_async
+    _prompt_bryndin_git _prompt_bryndin_venv _prompt_bryndin_async \
+    _prompt_bryndin_color_pat
   zstyle -d ':prezto:module:prompt' managed
 }
 
@@ -524,11 +545,19 @@ function prompt_bryndin_setup {
   (( $+functions[prompt_cleanup] )) && \
     prompt_cleanup 'prompt_bryndin_teardown' 2>/dev/null
 
-  # Set editor-info parameters.
-  zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
-  zstyle ':prezto:module:editor:info:keymap:primary' format '%B%F{red}❯%F{yellow}❯%F{green}❯%f%b'
-  zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '%F{red}♺%f'
-  zstyle ':prezto:module:editor:info:keymap:alternate' format '%B%F{green}❮%F{yellow}❮%F{red}❮%f%b'
+  # Set editor-info parameters.  These are consumed by editor-info at draw
+  # time, so monochrome mode needs its own colourless variants.
+  if (( _prompt_bryndin_monochrome )); then
+    zstyle ':prezto:module:editor:info:completing' format '...'
+    zstyle ':prezto:module:editor:info:keymap:primary' format '❯❯❯'
+    zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '♺'
+    zstyle ':prezto:module:editor:info:keymap:alternate' format '❮❮❮'
+  else
+    zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
+    zstyle ':prezto:module:editor:info:keymap:primary' format '%B%F{red}❯%F{yellow}❯%F{green}❯%f%b'
+    zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '%F{red}♺%f'
+    zstyle ':prezto:module:editor:info:keymap:alternate' format '%B%F{green}❮%F{yellow}❮%F{red}❮%f%b'
+  fi
 
   # Set git-info parameters.
   zstyle ':prezto:module:git:info' verbose 'yes'
@@ -593,7 +622,11 @@ function prompt_bryndin_setup {
     local newline="${prompt_newline:-$'\n'}"
     PROMPT='${_prompt_bryndin_header}'"${newline}"$PROMPT
   fi
-  SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
+  if (( _prompt_bryndin_monochrome )); then
+    SPROMPT='zsh: correct %R to %r [nyae]? '
+  else
+    SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
+  fi
 
   # Last command status on the right of the input line.  The numeric code is
   # opt-in through the framework-wide show-return-val style.
