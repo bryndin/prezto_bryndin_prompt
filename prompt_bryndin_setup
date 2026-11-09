@@ -143,6 +143,9 @@ function prompt_bryndin_color_escape {
 
 function prompt_bryndin_build_colors {
   emulate -L zsh
+  # Own the style reload here so the colour layer is self-contained and does
+  # not depend on who called setup.
+  prompt_bryndin_load_config
   local mode=$_prompt_bryndin_conf[colors]
   _prompt_bryndin_monochrome=0
   [[ $mode == none || -n $NO_COLOR || $TERM == dumb ]] && _prompt_bryndin_monochrome=1
@@ -507,9 +510,8 @@ function prompt_bryndin_setup {
   unsetopt XTRACE KSH_ARRAYS
   prompt_opts=(cr percent sp subst)
 
-  # Re-read styles on every setup so `prompt bryndin' (and previews) pick up
-  # changes made after the theme was first sourced.
-  prompt_bryndin_load_config
+  # Build the colour map (this also re-reads zstyles, so `prompt bryndin' and
+  # previews pick up changes made after the theme was first sourced).
   prompt_bryndin_build_colors
 
   # Load required functions.
