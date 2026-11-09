@@ -623,3 +623,4 @@ function prompt_bryndin_setup {
 }
 
 prompt_bryndin_setup "$@"
+# vim: ft=zsh

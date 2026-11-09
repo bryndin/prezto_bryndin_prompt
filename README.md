@@ -146,9 +146,13 @@ Tests
 -----
 
 ```sh
-zsh test/smoke.zsh
+zsh test/all.zsh
 zsh -n prompt_bryndin_setup
 ```
+
+Each test file can also be run on its own (`zsh test/coalesce.zsh`, etc.). They
+load the theme with the Prezto modules stubbed out, so no Prezto installation
+is required.
 
 Screenshots
 -----------
