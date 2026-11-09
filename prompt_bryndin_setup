@@ -223,6 +223,7 @@ function prompt_bryndin_pwd_text {
   emulate -L zsh
   setopt EXTENDED_GLOB
   local style=$_prompt_bryndin_conf[pwd]
+  local max=${1:-$_prompt_bryndin_conf[max-block-width]}
   local text
 
   case $style in
@@ -248,13 +249,12 @@ function prompt_bryndin_pwd_text {
       ;;
   esac
 
-  local max=$_prompt_bryndin_conf[max-block-width]
   (( max > 0 )) && text=$(prompt_bryndin_clip "$text" "$max")
   print -rn -- "${text//\%/%%}"
 }
 
 function prompt_bryndin_prepare_compressed_pwd {
-  local text=$(prompt_bryndin_pwd_text)
+  local text=$(prompt_bryndin_pwd_text "$1")
 
   # Keep the "no write permission" highlight in the compressed representation
   # too; otherwise the feature silently disappears on long paths.
@@ -379,6 +379,17 @@ function prompt_bryndin_precmd {
 
   # fallback to compressed PWD if blocks aren't fitting
   (( _prompt_bryndin_overflow > 0 )) && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
+
+  # If it still does not fit, clip the directory by the remaining deficit so
+  # the line never wraps.  prompt-pwd's '%%' escaping is undone for measuring
+  # and re-applied by prompt_bryndin_pwd_text afterwards.
+  if (( _prompt_bryndin_overflow > 0 )); then
+    local plain=$(prompt_bryndin_pwd_text 0)
+    local keep=$(( ${(m)#${plain//\%\%/\%}} - _prompt_bryndin_overflow ))
+    (( keep < 1 )) && keep=1
+    _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd $keep)"
+    prompt_bryndin_prepare_header
+  fi
 
   # Store the finished header as prompt text.  It is rendered as part of
   # PROMPT rather than printed by precmd, so it survives clear-screen,
