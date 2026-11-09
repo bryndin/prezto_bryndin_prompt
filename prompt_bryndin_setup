@@ -78,8 +78,8 @@ function prompt_bryndin_precmd {
 
   local filler=""
   # fallback to compressed PWD if blocks aren't fitting
-  [[ _prompt_bryndin_filler_width -lt 0 ]] && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
-  [[ _prompt_bryndin_filler_width -gt 0 ]] && filler="${(l:${_prompt_bryndin_filler_width}::─:)}"
+  (( _prompt_bryndin_filler_width < 0 )) && _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)" && prompt_bryndin_prepare_header
+  (( _prompt_bryndin_filler_width > 0 )) && filler="${(l:${_prompt_bryndin_filler_width}::─:)}"
 
   # print with expansion
   print -P "${_prompt_bryndin_left}%F{$_prompt_bryndin_color}${filler}%f${_prompt_bryndin_right}"
