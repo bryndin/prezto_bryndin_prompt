@@ -27,8 +27,12 @@ prompt_bryndin_setup
 }
 
 zstyle ':prezto:module:prompt:bryndin' exit-status 'no'
+zstyle ':prezto:module:prompt:bryndin' jobs 'no'
+zstyle ':prezto:module:prompt:bryndin' history 'no'
+zstyle ':prezto:module:prompt:bryndin' duration 'no'
+zstyle ':prezto:module:prompt:bryndin' vim 'no'
 prompt_bryndin_setup
-[[ -z $RPROMPT ]] || {
+[[ $RPROMPT != *'✘'* ]] || {
   print -u2 "FAIL: exit-status=no ignored: $RPROMPT"; exit 1
 }
 

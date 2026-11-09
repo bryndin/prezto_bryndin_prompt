@@ -21,6 +21,8 @@ typeset -gA _prompt_bryndin_conf
 typeset -gA _prompt_bryndin_fg
 typeset -ga _prompt_bryndin_blocks
 typeset -g  _prompt_bryndin_monochrome=0
+typeset -g  _prompt_bryndin_cmd_start=0
+typeset -g  _prompt_bryndin_duration_text=''
 typeset -g  _prompt_bryndin_color=''
 typeset -g  _prompt_bryndin_time_color=''
 typeset -g  _prompt_bryndin_host_color=''
@@ -305,8 +307,22 @@ function prompt_bryndin_reflow {
   _prompt_bryndin_header="${_prompt_bryndin_left_expanded}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${_prompt_bryndin_right_expanded}"
 }
 
+function prompt_bryndin_preexec {
+  _prompt_bryndin_cmd_start=$SECONDS
+}
+
 function prompt_bryndin_precmd {
   setopt LOCAL_OPTIONS EXTENDED_GLOB
+
+  # Command duration (integer seconds; cleared after each command).
+  if (( _prompt_bryndin_cmd_start > 0 )); then
+    local elapsed=$(( SECONDS - _prompt_bryndin_cmd_start ))
+    _prompt_bryndin_cmd_start=0
+    (( elapsed > 0 )) && _prompt_bryndin_duration_text="${elapsed}s " \
+      || _prompt_bryndin_duration_text=''
+  else
+    _prompt_bryndin_duration_text=''
+  fi
 
   # Format PWD.
   _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_full_pwd)"
@@ -357,6 +373,7 @@ function prompt_bryndin_setup {
 
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_bryndin_precmd
+  add-zsh-hook preexec prompt_bryndin_preexec
   add-zle-hook-widget line-pre-redraw prompt_bryndin_line_pre_redraw
 
   # Required for the editor module to populate editor_info (see
@@ -440,6 +457,19 @@ function prompt_bryndin_setup {
     [[ $_prompt_bryndin_conf[show-return-code] == yes ]] && code='%? '
     RPROMPT="%(?..${_prompt_bryndin_fg[error-color]}✘ ${code}${_prompt_bryndin_fg[reset]})"
   fi
+
+  # Optional context indicators.  All are prompt strings: %-escapes and ${...}
+  # are evaluated by zsh at draw time, not at setup time.
+  [[ $_prompt_bryndin_conf[jobs] == yes ]] && \
+    RPROMPT+="%(1j.${main_fg}[%j&]${reset_fg} .)"
+  [[ $_prompt_bryndin_conf[history] == yes ]] && \
+    RPROMPT+="${main_fg}!%!${reset_fg} "
+  [[ $_prompt_bryndin_conf[duration] == yes ]] && \
+    RPROMPT+='${_prompt_bryndin_duration_text}'
+  [[ $_prompt_bryndin_conf[vim] == yes ]] && \
+    RPROMPT+='${VIM:+" %BV%f%b"}'
+  [[ $_prompt_bryndin_conf[overwrite] == yes ]] && \
+    PROMPT+='${editor_info[overwrite]}'
 
   # The python module already exports VIRTUAL_ENV_DISABLE_PROMPT=20 to keep
   # virtualenv from printing its own prompt.  Do not clobber that value: pure
