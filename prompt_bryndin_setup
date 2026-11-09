@@ -120,8 +120,11 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:stashed' format ' %%B%F{cyan}✭%f%%b'
   zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
   zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
+  # Keep $(coalesce ...) quoted so it is evaluated by ${(e)git_info[prompt]}
+  # *after* git-info's zformat has substituted %b/%p/%c.  Using double quotes
+  # here would run it at setup time with three literal, non-empty arguments.
   zstyle ':prezto:module:git:info:keys' format \
-    'prompt' "%F{$_prompt_bryndin_color}─(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u%F{$_prompt_bryndin_color})%f"
+    'prompt' '%F{'$_prompt_bryndin_color'}(%F{blue}git%f$(coalesce "%b" "%p" "%c")%s%A%B%S%a%d%m%r%U%u%F{'$_prompt_bryndin_color'})%f'
 
   # Set python-info (virtualenv) parameters. 
   zstyle ':prezto:module:python:info:virtualenv' format "%F{$_prompt_bryndin_color}─<%F{$_prompt_bryndin_virtualenv_color}%v%F{$_prompt_bryndin_color}>%f"
