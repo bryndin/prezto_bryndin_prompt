@@ -23,6 +23,8 @@ typeset -ga _prompt_bryndin_blocks
 typeset -g  _prompt_bryndin_monochrome=0
 typeset -g  _prompt_bryndin_cmd_start=0
 typeset -g  _prompt_bryndin_duration_text=''
+typeset -g  _prompt_bryndin_git=''
+typeset -g  _prompt_bryndin_async=0
 typeset -g  _prompt_bryndin_color=''
 typeset -g  _prompt_bryndin_time_color=''
 typeset -g  _prompt_bryndin_host_color=''
@@ -144,6 +146,12 @@ function prompt_bryndin_build_colors {
     _prompt_bryndin_fg[reset]='%f'
   fi
 }
+
+# These associative arrays are populated by git-info, python-info and
+# editor-info.  Declare them so the theme still renders cleanly when one of
+# those modules is unavailable (an unset scalar with a [subscript] is parsed as
+# arithmetic and throws "bad math expression").
+typeset -gA git_info python_info editor_info
 
 # Load dependencies.
 pmodload 'helper' 'python' 'git'
@@ -307,6 +315,30 @@ function prompt_bryndin_reflow {
   _prompt_bryndin_header="${_prompt_bryndin_left_expanded}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${_prompt_bryndin_right_expanded}"
 }
 
+#
+# Runs inside the async worker.  Prints the fully rendered git block; the
+# callback stores it in _prompt_bryndin_git and redraws the prompt.
+#
+function prompt_bryndin_async_git {
+  emulate -L zsh
+  cd -q "$1" 2>/dev/null || return 1
+  (( $+functions[git-info] )) || return 1
+  git-info || return 1
+  print -r -- "${(e)git_info[prompt]}"
+}
+
+function prompt_bryndin_async_callback {
+  emulate -L zsh
+  [[ $1 == prompt_bryndin_async_git ]] || return 0
+  local rendered=$3
+  [[ $rendered == $_prompt_bryndin_git ]] && return 0
+  _prompt_bryndin_git=$rendered
+  prompt_bryndin_prepare_header
+  prompt_bryndin_reflow
+  # Only redraw when zle is active (the callback also fires in scripts).
+  zle && zle reset-prompt
+}
+
 function prompt_bryndin_preexec {
   _prompt_bryndin_cmd_start=$SECONDS
 }
@@ -327,8 +359,16 @@ function prompt_bryndin_precmd {
   # Format PWD.
   _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_full_pwd)"
 
-  # Get Git repository information.
-  (( $+functions[git-info] )) && git-info
+  # Get Git repository information.  In async mode the worker renders the
+  # block and the callback updates it; otherwise do it here synchronously.
+  if (( _prompt_bryndin_async )); then
+    async_flush_jobs prompt_bryndin
+    async_job prompt_bryndin prompt_bryndin_async_git "$PWD"
+  else
+    (( $+functions[git-info] )) && git-info
+    _prompt_bryndin_git=''
+    [[ -n $git_info[prompt] ]] && _prompt_bryndin_git=${(e)git_info[prompt]}
+  fi
 
   # Get Virtualenv information. The python module returns early when no Python
   # interpreter is installed, so python-info may not exist.
@@ -370,6 +410,24 @@ function prompt_bryndin_setup {
   # Load required functions.
   autoload -Uz add-zsh-hook add-zle-hook-widget
   prompt_bryndin_has_prompt_pwd && autoload -Uz prompt-pwd
+
+  # Optional async git status.  Fall back to synchronous collection when the
+  # helper is unavailable or fails to initialise.
+  _prompt_bryndin_async=0
+  if [[ $_prompt_bryndin_conf[async] == yes ]]; then
+    local dir async_file=''
+    for dir in $fpath; do
+      [[ -r $dir/async ]] && { async_file=$dir/async; break }
+    done
+    if [[ -n $async_file ]]; then
+      autoload -Uz async && async
+      if (( $+functions[async_start_worker] )); then
+        async_start_worker prompt_bryndin -n
+        async_register_callback prompt_bryndin prompt_bryndin_async_callback
+        _prompt_bryndin_async=1
+      fi
+    fi
+  fi
 
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_bryndin_precmd
@@ -421,7 +479,7 @@ function prompt_bryndin_setup {
   prompt_bryndin_is_remote && host="${_prompt_bryndin_fg[host-color]}@%m${reset_fg}"
   local host_block="${main_fg}─(${reset_fg}%(!.${_prompt_bryndin_fg[error-color]}%n${reset_fg}.${_prompt_bryndin_fg[host-color]}%n${reset_fg}$host)${main_fg})${reset_fg}"
 
-  local git_block='${git_info:+${(e)git_info[prompt]}}'
+  local git_block='${_prompt_bryndin_git}'
 
   local virtualenv_block='${python_info[virtualenv]}'
 
