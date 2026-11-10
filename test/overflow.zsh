@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 #
 # Even on a very narrow terminal the header must not exceed COLUMNS: the
-# directory block is clipped after the compressed-PWD fallback.
+# directory block is clipped after the compressed-PWD fallback, and whole
+# header blocks are dropped if it still does not fit.
 #
 emulate -LR zsh
 zmodload -i zsh/zutil
@@ -21,6 +22,12 @@ typeset -gA git_info python_info editor_info
 git_info=(); python_info=(); editor_info=(keymap '❯')
 zstyle ':prezto:module:prompt:bryndin' async 'no'
 prompt_newline=$'\n%{\r%}'
+
+# Pin the virtualenv name so the test does not depend on the caller's
+# environment (direnv, for example, may set VIRTUAL_ENV).
+unset CONDA_DEFAULT_ENV
+VIRTUAL_ENV='/tmp/bryndin-test-virtualenv'
+
 source "$theme"
 
 local width_of() {
@@ -38,5 +45,19 @@ for cols in 20 30 40 60 80; do
     print -u2 "FAIL: header is $w columns wide at COLUMNS=$cols"; exit 1
   }
 done
+
+# Wide enough for everything: the virtualenv block is present.
+COLUMNS=120
+prompt_bryndin_precmd
+[[ $_prompt_bryndin_header == *'bryndin-test-virtualenv'* ]] || {
+  print -u2 "FAIL: virtualenv block missing on a wide terminal"; exit 1
+}
+
+# Very narrow: the block is dropped rather than overflowing.
+COLUMNS=20
+prompt_bryndin_precmd
+[[ $_prompt_bryndin_header != *'bryndin-test-virtualenv'* ]] || {
+  print -u2 "FAIL: virtualenv block was not dropped on a narrow terminal"; exit 1
+}
 
 print "PASS: header never overflows on narrow terminals"

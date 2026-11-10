@@ -19,6 +19,8 @@
 # All internal state is namespaced so switching themes cannot leak globals.
 typeset -gA _prompt_bryndin_conf
 typeset -gA _prompt_bryndin_fg
+typeset -gA _prompt_bryndin_block_text
+typeset -gA _prompt_bryndin_block_expanded
 typeset -ga _prompt_bryndin_blocks
 typeset -g  _prompt_bryndin_monochrome=0
 typeset -g  _prompt_bryndin_cmd_start=0
@@ -342,8 +344,17 @@ function prompt_bryndin_measure {
 }
 
 function prompt_bryndin_prepare_header {
-  # Expand the deferred ${...} blocks exactly once and cache the result.
-  local left=${(e)_prompt_bryndin_left}
+  # Expand the deferred ${...} blocks exactly once and cache the result.  The
+  # per-block copies let reflow drop whole blocks without cutting through a
+  # prompt escape sequence.
+  local block expanded left=''
+  _prompt_bryndin_block_expanded=()
+  for block in $_prompt_bryndin_blocks; do
+    expanded=${(e)_prompt_bryndin_block_text[$block]}
+    _prompt_bryndin_block_expanded[$block]=$expanded
+    left+=$expanded
+  done
+
   local right=${(e)_prompt_bryndin_right}
   _prompt_bryndin_left_expanded=$left
   _prompt_bryndin_right_expanded=$right
@@ -357,7 +368,23 @@ function prompt_bryndin_prepare_header {
 #
 function prompt_bryndin_reflow {
   emulate -L zsh
-  prompt_bryndin_measure "$_prompt_bryndin_left_expanded" "$_prompt_bryndin_right_expanded"
+  local left=$_prompt_bryndin_left_expanded
+  local right=$_prompt_bryndin_right_expanded
+  prompt_bryndin_measure "$left" "$right"
+
+  # If the blocks still do not fit (very narrow terminal), drop whole blocks
+  # from the right of the configured order.  Clipping the string itself would
+  # risk cutting through a prompt escape sequence.
+  if (( _prompt_bryndin_overflow > 0 )); then
+    local -a active=($_prompt_bryndin_blocks)
+    local block
+    while (( _prompt_bryndin_overflow > 0 && $#active > 0 )); do
+      active[-1]=()
+      left=''
+      for block in $active; do left+=$_prompt_bryndin_block_expanded[$block]; done
+      prompt_bryndin_measure "$left" "$right"
+    done
+  fi
 
   # Repeat the separator to fill the available display columns.  A plain loop
   # (rather than ${(l:...:)}) keeps the separator configurable and lets us
@@ -369,7 +396,7 @@ function prompt_bryndin_reflow {
   local count=$(( _prompt_bryndin_filler_width / sep_width ))
   local filler='' i
   for (( i = 0; i < count; i++ )); do filler+=$sep_escaped; done
-  _prompt_bryndin_header="${_prompt_bryndin_left_expanded}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${_prompt_bryndin_right_expanded}"
+  _prompt_bryndin_header="${left}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${right}"
   (( _prompt_bryndin_monochrome )) && \
     _prompt_bryndin_header=$(prompt_bryndin_strip_colors "$_prompt_bryndin_header")
 }
@@ -496,6 +523,7 @@ function prompt_bryndin_teardown {
   unset _prompt_bryndin_conf _prompt_bryndin_fg _prompt_bryndin_blocks \
     _prompt_bryndin_color _prompt_bryndin_time_color _prompt_bryndin_host_color \
     _prompt_bryndin_virtualenv_color _prompt_bryndin_dir_color \
+    _prompt_bryndin_block_text _prompt_bryndin_block_expanded \
     _prompt_bryndin_left _prompt_bryndin_right _prompt_bryndin_left_expanded \
     _prompt_bryndin_right_expanded _prompt_bryndin_header _prompt_bryndin_cur_dir \
     _prompt_bryndin_filler_width _prompt_bryndin_overflow _prompt_bryndin_monochrome \
@@ -605,15 +633,22 @@ function prompt_bryndin_setup {
   local dir_block="${main_fg}[${_prompt_bryndin_fg[dir-color]}"'${_prompt_bryndin_cur_dir}'"${main_fg}]─${reset_fg}"
 
   # Define prompts.  Blocks are selected (and ordered) by the `blocks` zstyle.
-  _prompt_bryndin_left=''
+  # Keep the individual templates as well, so reflow can drop whole blocks on
+  # a terminal too narrow to show them all.
+  _prompt_bryndin_block_text=()
   local block
   for block in $_prompt_bryndin_blocks; do
     case $block in
-      time)       _prompt_bryndin_left+=$time_block ;;
-      host)       _prompt_bryndin_left+=$host_block ;;
-      virtualenv) _prompt_bryndin_left+=$virtualenv_block ;;
-      git)        _prompt_bryndin_left+=$git_block ;;
+      time)       _prompt_bryndin_block_text[time]=$time_block ;;
+      host)       _prompt_bryndin_block_text[host]=$host_block ;;
+      virtualenv) _prompt_bryndin_block_text[virtualenv]=$virtualenv_block ;;
+      git)        _prompt_bryndin_block_text[git]=$git_block ;;
     esac
+  done
+
+  _prompt_bryndin_left=''
+  for block in $_prompt_bryndin_blocks; do
+    _prompt_bryndin_left+=$_prompt_bryndin_block_text[$block]
   done
   _prompt_bryndin_right="${dir_block}"
   PROMPT="%(!. %B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b.)"'${editor_info[keymap]}'
