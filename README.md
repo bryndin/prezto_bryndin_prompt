@@ -89,7 +89,7 @@ zstyle ':prezto:module:prompt:bryndin' error-color        'red'
 # auto | 256 | 16 | none.  NO_COLOR also forces 'none'.
 zstyle ':prezto:module:prompt:bryndin' colors             'auto'
 
-# Separator glyph and its colour (empty = same as `color`).
+# Separator glyph and its colour (empty = same as `main-color`).
 zstyle ':prezto:module:prompt:bryndin' separator          '─'
 zstyle ':prezto:module:prompt:bryndin' separator-color    ''
 
