@@ -603,6 +603,16 @@ function prompt_bryndin_setup {
   zstyle ':prezto:module:git:info:keys' format \
     'prompt' "${main_fg}─(${_prompt_bryndin_fg[git-color]}git${reset_fg}"'$(coalesce "%b" "%p" "%c")'"%s%A%B%S%a%d%m%r%U%u${main_fg})${reset_fg}"
 
+  # Keep virtualenv from prefixing the prompt with `(.venv) '.  In zsh, $PS1
+  # and $PROMPT are the same parameter, so a sourced activate script would
+  # edit this very theme's output.  Prezto's python module exports
+  # VIRTUAL_ENV_DISABLE_PROMPT only when virtualenvwrapper is initialised,
+  # which leaves plain `venv' environments defenceless, so do it here --
+  # matching pure, which swaps an empty/unset value for the same sentinel
+  # ('20') and so may other themes.  A deliberately different value (pure's
+  # "user took control" signal) must be preserved.
+  export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-20}"
+
   # Set python-info (virtualenv) parameters.  Kept for compatibility with other
   # themes; this theme renders the block from the env vars itself so it can
   # escape the name (see prompt_bryndin_prepare_virtualenv).
@@ -682,10 +692,6 @@ function prompt_bryndin_setup {
     RPROMPT+='${VIM:+" %BV%f%b"}'
   [[ $_prompt_bryndin_conf[overwrite] == yes ]] && \
     PROMPT+='${editor_info[overwrite]}'
-
-  # The python module already exports VIRTUAL_ENV_DISABLE_PROMPT=20 to keep
-  # virtualenv from printing its own prompt.  Do not clobber that value: pure
-  # and other themes use it as a sentinel.
 }
 
 prompt_bryndin_setup "$@"
