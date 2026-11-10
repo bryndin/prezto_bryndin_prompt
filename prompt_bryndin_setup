@@ -70,6 +70,7 @@ function prompt_bryndin_load_config {
     duration          'no'
     vim               'yes'
     overwrite         'yes'
+    keymap-indicator  'no'
     single-line       'no'
     show-return-code  'no'
   )
@@ -641,7 +642,12 @@ function prompt_bryndin_setup {
     _prompt_bryndin_left+=$_prompt_bryndin_block_text[$block]
   done
   _prompt_bryndin_right="${dir_block}"
-  PROMPT="%(!. %B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b.)"'${editor_info[keymap]}'
+  PROMPT="%(!. %B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b.)"
+
+  # The ZLE keymap indicator (❯❯❯ / ❮❮❮) is opt-in: many people prefer a
+  # bare input line.  It requires the `managed' zstyle above to be populated.
+  [[ $_prompt_bryndin_conf[keymap-indicator] == yes ]] && \
+    PROMPT+='${editor_info[keymap]}'
 
   # Prepend the header.  Keeping it inside PROMPT (instead of printing it from
   # precmd) means zle redraws reproduce it.  `single-line' drops it entirely.

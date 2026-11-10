@@ -118,6 +118,8 @@ zstyle ':prezto:module:prompt:bryndin' history             'no'
 zstyle ':prezto:module:prompt:bryndin' duration            'no'
 zstyle ':prezto:module:prompt:bryndin' vim                 'yes'
 zstyle ':prezto:module:prompt:bryndin' overwrite           'yes'
+# ZLE keymap indicator (❯❯❯ / ❮❮❮) before the input line.
+zstyle ':prezto:module:prompt:bryndin' keymap-indicator    'no'
 
 # Collapse to a single line (drop the separator header).
 zstyle ':prezto:module:prompt:bryndin' single-line         'no'
