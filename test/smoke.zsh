@@ -16,6 +16,9 @@ zmodload -i zsh/zutil
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT PROMPT_CR MULTIBYTE
 unsetopt KSH_ARRAYS
 
+# Keep the caller's virtualenv out of the header.
+unset VIRTUAL_ENV CONDA_DEFAULT_ENV
+
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 [[ -r $theme ]] || { print -u2 "cannot read $theme"; exit 1 }
 
