@@ -28,11 +28,6 @@ typeset -g  _prompt_bryndin_duration_text=''
 typeset -g  _prompt_bryndin_git=''
 typeset -g  _prompt_bryndin_venv=''
 typeset -g  _prompt_bryndin_async=0
-typeset -g  _prompt_bryndin_color=''
-typeset -g  _prompt_bryndin_time_color=''
-typeset -g  _prompt_bryndin_host_color=''
-typeset -g  _prompt_bryndin_virtualenv_color=''
-typeset -g  _prompt_bryndin_dir_color=''
 typeset -g  _prompt_bryndin_left=''
 typeset -g  _prompt_bryndin_right=''
 typeset -g  _prompt_bryndin_left_expanded=''
@@ -49,8 +44,12 @@ typeset -g  _prompt_bryndin_overflow=0
 #
 function prompt_bryndin_load_config {
   emulate -L zsh
+  # NOTE: Prezto reserves the style name `color' for its global
+  # `zstyle ":prezto:*:*" color "yes"' setting, and zstyle patterns match
+  # across colons.  Never name a theme option `color' (or `case-sensitive'):
+  # it would inherit the framework value.  Hence `main-color'.
   _prompt_bryndin_conf=(
-    color             'cyan'
+    main-color        'cyan'
     time-color        '27'
     host-color        '27'
     virtualenv-color  'yellow'
@@ -90,13 +89,6 @@ function prompt_bryndin_load_config {
   zstyle -t ':prezto:module:prompt' show-return-val \
     && _prompt_bryndin_conf[show-return-code]='yes'
 
-  # Compatibility shim for the existing block builders; new code reads
-  # _prompt_bryndin_conf directly.
-  _prompt_bryndin_color=$_prompt_bryndin_conf[color]
-  _prompt_bryndin_time_color=$_prompt_bryndin_conf[time-color]
-  _prompt_bryndin_host_color=$_prompt_bryndin_conf[host-color]
-  _prompt_bryndin_virtualenv_color=$_prompt_bryndin_conf[virtualenv-color]
-  _prompt_bryndin_dir_color=$_prompt_bryndin_conf[dir-color]
 }
 
 prompt_bryndin_load_config
@@ -155,11 +147,11 @@ function prompt_bryndin_build_colors {
   typeset -gA _prompt_bryndin_fg
   _prompt_bryndin_fg=()
   local key
-  for key in color time-color host-color virtualenv-color dir-color git-color error-color; do
+  for key in main-color time-color host-color virtualenv-color dir-color git-color error-color; do
     _prompt_bryndin_fg[$key]=$(prompt_bryndin_color_escape "$_prompt_bryndin_conf[$key]")
   done
   _prompt_bryndin_fg[separator-color]=$(prompt_bryndin_color_escape \
-    "${_prompt_bryndin_conf[separator-color]:-$_prompt_bryndin_conf[color]}")
+    "${_prompt_bryndin_conf[separator-color]:-$_prompt_bryndin_conf[main-color]}")
   if (( _prompt_bryndin_monochrome )); then
     _prompt_bryndin_fg[reset]=''
   else
@@ -208,7 +200,7 @@ function prompt_bryndin_prepare_virtualenv {
   [[ -z $name ]] && name=$CONDA_DEFAULT_ENV
   [[ -z $name ]] && return 0
   local safe=$(prompt_bryndin_escape "$name")
-  print -rn -- "${_prompt_bryndin_fg[color]}─<${_prompt_bryndin_fg[virtualenv-color]}${safe}${_prompt_bryndin_fg[color]}>${_prompt_bryndin_fg[reset]}"
+  print -rn -- "${_prompt_bryndin_fg[main-color]}─<${_prompt_bryndin_fg[virtualenv-color]}${safe}${_prompt_bryndin_fg[main-color]}>${_prompt_bryndin_fg[reset]}"
 }
 
 #
@@ -521,8 +513,6 @@ function prompt_bryndin_teardown {
   (( $+functions[async_stop_worker] )) && async_stop_worker prompt_bryndin 2>/dev/null
 
   unset _prompt_bryndin_conf _prompt_bryndin_fg _prompt_bryndin_blocks \
-    _prompt_bryndin_color _prompt_bryndin_time_color _prompt_bryndin_host_color \
-    _prompt_bryndin_virtualenv_color _prompt_bryndin_dir_color \
     _prompt_bryndin_block_text _prompt_bryndin_block_expanded \
     _prompt_bryndin_left _prompt_bryndin_right _prompt_bryndin_left_expanded \
     _prompt_bryndin_right_expanded _prompt_bryndin_header _prompt_bryndin_cur_dir \
@@ -607,7 +597,7 @@ function prompt_bryndin_setup {
   # Keep $(coalesce ...) quoted so it is evaluated by ${(e)git_info[prompt]}
   # *after* git-info's zformat has substituted %b/%p/%c.  Using double quotes
   # here would run it at setup time with three literal, non-empty arguments.
-  local main_fg=${_prompt_bryndin_fg[color]}
+  local main_fg=${_prompt_bryndin_fg[main-color]}
   local reset_fg=${_prompt_bryndin_fg[reset]}
   zstyle ':prezto:module:git:info:keys' format \
     'prompt' "${main_fg}─(${_prompt_bryndin_fg[git-color]}git${reset_fg}"'$(coalesce "%b" "%p" "%c")'"%s%A%B%S%a%d%m%r%U%u${main_fg})${reset_fg}"

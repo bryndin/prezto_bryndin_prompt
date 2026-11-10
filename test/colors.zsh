@@ -18,7 +18,7 @@ source "$theme"
 (( _prompt_bryndin_monochrome == 1 )) || {
   print -u2 "FAIL: NO_COLOR did not enable monochrome mode"; exit 1
 }
-[[ -z $_prompt_bryndin_fg[color] ]] || {
+[[ -z $_prompt_bryndin_fg[main-color] ]] || {
   print -u2 "FAIL: colours still emitted in monochrome mode"; exit 1
 }
 [[ -z $_prompt_bryndin_fg[reset] ]] || {

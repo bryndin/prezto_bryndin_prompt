@@ -9,7 +9,7 @@ setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 
-zstyle ':prezto:module:prompt:bryndin' color 'magenta'
+zstyle ':prezto:module:prompt:bryndin' main-color 'magenta'
 zstyle ':prezto:module:prompt:bryndin' time-format '%D{%H:%M}'
 zstyle ':prezto:module:prompt:bryndin' separator '='
 zstyle ':prezto:module:prompt:bryndin' blocks 'time' 'git'
@@ -19,8 +19,8 @@ function add-zsh-hook { : }
 
 source "$theme"
 
-[[ $_prompt_bryndin_color == magenta ]] || {
-  print -u2 "FAIL: color override ignored ($_prompt_bryndin_color)"; exit 1
+[[ $_prompt_bryndin_fg[main-color] == '%F{magenta}' ]] || {
+  print -u2 "FAIL: main-color override ignored ($_prompt_bryndin_fg[main-color])"; exit 1
 }
 [[ $_prompt_bryndin_conf[time-format] == '%D{%H:%M}' ]] || {
   print -u2 "FAIL: time-format override ignored"; exit 1

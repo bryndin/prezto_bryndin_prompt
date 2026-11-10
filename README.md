@@ -77,7 +77,9 @@ All options live under `:prezto:module:prompt:bryndin`. Put these in
 
 ```sh
 # Colours. Named colours, 0-15, or 256-colour indices.
-zstyle ':prezto:module:prompt:bryndin' color             'cyan'
+# (Named `main-color', not `color': Prezto's global ':prezto:*:* color' style
+# would otherwise leak into this context.)
+zstyle ':prezto:module:prompt:bryndin' main-color        'cyan'
 zstyle ':prezto:module:prompt:bryndin' time-color         '27'
 zstyle ':prezto:module:prompt:bryndin' host-color         '27'
 zstyle ':prezto:module:prompt:bryndin' virtualenv-color   'yellow'
