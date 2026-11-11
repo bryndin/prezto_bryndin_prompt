@@ -529,10 +529,25 @@ function prompt_bryndin_precmd {
 function prompt_bryndin_line_pre_redraw {
   emulate -L zsh
   [[ -n $_prompt_bryndin_header ]] || return 0
-  # Once the user starts editing a new command, drop the previous command's
-  # status from RPROMPT. The next precmd will set the new status.
-  [[ -n ${BUFFER:-} ]] && _prompt_bryndin_status_text=''
+
+  # Changing the variable only updates the state: zsh expands PROMPT/RPROMPT
+  # when zle starts or when reset-prompt runs, not on every keystroke.  Force
+  # the repaint in the same pass so the previous command's status disappears
+  # as soon as the user starts editing the next one.
+  local cleared=0
+  if [[ -n ${BUFFER:-} && -n $_prompt_bryndin_status_text ]]; then
+    _prompt_bryndin_status_text=''
+    cleared=1
+  fi
+
   prompt_bryndin_reflow
+  # The redraw triggered by reset-prompt sees an empty status, so this cannot
+  # recurse.  Always return success: add-zle-hook-widget stops running the
+  # remaining line-pre-redraw hooks when one of them fails.
+  if (( cleared )); then
+    zle reset-prompt
+  fi
+  return 0
 }
 
 #
