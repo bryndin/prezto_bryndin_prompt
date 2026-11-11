@@ -66,19 +66,52 @@ prompt_bryndin_async_callback prompt_bryndin_async_git 0 'GITBLOCK'
   print -u2 "FAIL: callback did not rebuild the header"; exit 1
 }
 
-# Changing directories must drop the previous repository's block immediately;
-# the worker fills in the new one asynchronously.
-_prompt_bryndin_git='OLDGIT'
-_prompt_bryndin_last_pwd="$PWD/old"
-prompt_bryndin_precmd
-[[ -z $_prompt_bryndin_git ]] || {
-  print -u2 "FAIL: stale git block survived a directory change: $_prompt_bryndin_git"; exit 1
+# Same repository: keep the block so `cd src` does not flicker.
+if command -v git >/dev/null 2>&1; then
+  local repo=$(mktemp -d /tmp/opencode/bryndin-async-repo.XXXXXX)
+  git -C "$repo" init -q
+  local root=$(command git -C "$repo" rev-parse --show-toplevel)
+  cd "$repo"
+
+  _prompt_bryndin_git='GITBLOCK'
+  _prompt_bryndin_git_root="$root"
+  _prompt_bryndin_last_pwd="$repo/old"
+  COLUMNS=200
+  prompt_bryndin_precmd
+  [[ $_prompt_bryndin_git == 'GITBLOCK' ]] || {
+    print -u2 "FAIL: same-repository cd cleared the git block"; exit 1
+  }
+  [[ $_prompt_bryndin_git_root == "$root" ]] || {
+    print -u2 "FAIL: repository root was not tracked"; exit 1
+  }
+
+  # Leaving the repository: clear the block immediately.
+  local nonrepo=$(mktemp -d /tmp/opencode/bryndin-async-nonrepo.XXXXXX)
+  cd "$nonrepo"
+  _prompt_bryndin_git='GITBLOCK'
+  _prompt_bryndin_last_pwd="$repo"
+  prompt_bryndin_precmd
+  [[ -z $_prompt_bryndin_git ]] || {
+    print -u2 "FAIL: stale git block survived leaving the repository: $_prompt_bryndin_git"; exit 1
+  }
+else
+  print "SKIP: git not found; root-tracking checks skipped"
+fi
+
+# A longer git block must compress the directory instead of making the header
+# overflow and dropping the git block in reflow.
+COLUMNS=40
+_prompt_bryndin_cur_dir='%~'
+_prompt_bryndin_git=''
+prompt_bryndin_async_callback prompt_bryndin_async_git 0 \
+  '%F{blue}git:feature/user-auth-refactor%f'
+[[ $_prompt_bryndin_cur_dir != '%~' ]] || {
+  print -u2 "FAIL: async callback did not refit the directory"; exit 1
 }
-[[ $_prompt_bryndin_header != *OLDGIT* ]] || {
-  print -u2 "FAIL: stale git block still in the header"; exit 1
-}
-[[ $_prompt_bryndin_last_pwd == $PWD ]] || {
-  print -u2 "FAIL: last PWD was not updated"; exit 1
+local zero='%([BSUbfksu]|([FBK]|){*})'
+local width=${#${(S%%)_prompt_bryndin_header//$~zero/}}
+(( width <= 40 )) || {
+  print -u2 "FAIL: async callback header overflows: $width > 40"; exit 1
 }
 
 print "PASS: async git status works"

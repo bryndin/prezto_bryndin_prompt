@@ -144,12 +144,13 @@ Notes
 
 * Git status is collected synchronously by default. Enable `async` for large
   repositories; if the async helper is unavailable the theme falls back to
-  synchronous collection.  When the directory changes, the previous
-  repository's git block is cleared immediately and the new one appears when
-  the worker returns; queued jobs are flushed on each prompt so rapid
-  directory changes do not build a backlog.
+  synchronous collection.  When the directory changes, the previous git block
+  is kept if the new directory is still inside the same repository and cleared
+  otherwise; the new block appears when the worker returns.  Queued jobs are
+  flushed on each prompt so rapid directory changes do not build a backlog.
 * The header re-flows on terminal resize via a `TRAPWINCH` handler.  Any
-  pre-existing resize trap is saved and restored when the theme is torn down.
+  pre-existing resize trap is chained while the theme is active and restored
+  when the theme is torn down.
 * `compressed-pwd` only controls the overflow fallback.  The normal header
   shows the full `%~` path and switches to the compressed form when it does not
   fit.

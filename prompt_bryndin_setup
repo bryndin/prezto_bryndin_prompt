@@ -39,6 +39,7 @@ typeset -g  _prompt_bryndin_cur_dir=''
 typeset -g  _prompt_bryndin_filler_width=0
 typeset -g  _prompt_bryndin_overflow=0
 typeset -g  _prompt_bryndin_last_pwd=''
+typeset -g  _prompt_bryndin_git_root=''
 typeset -g  _prompt_bryndin_trapwinch_installed=0
 typeset -g  _prompt_bryndin_had_trapwinch=0
 typeset -g  _prompt_bryndin_saved_trapwinch=''
@@ -280,6 +281,20 @@ function prompt_bryndin_has_prompt_pwd {
   return 1
 }
 
+function prompt_bryndin_tilde_pwd_reply {
+  emulate -L zsh
+  local home=${HOME%/}
+  if [[ -z $home ]]; then
+    REPLY=$PWD
+  elif [[ $PWD == $home ]]; then
+    REPLY='~'
+  elif [[ $PWD == $home/* ]]; then
+    REPLY="~${PWD#$home}"
+  else
+    REPLY=$PWD
+  fi
+}
+
 #
 # Produce the (%-escaped, clipped) directory text used when the full path does
 # not fit.  `compressed-pwd' selects the strategy; the default delegates to
@@ -299,14 +314,16 @@ function prompt_bryndin_pwd_text {
       text=$PWD
       ;;
     tilde)
-      text=${PWD/#$HOME/\~}
+      prompt_bryndin_tilde_pwd_reply
+      text=$REPLY
       ;;
     *)
       if prompt_bryndin_has_prompt_pwd; then
         text=$(prompt-pwd)
         text=${text//\%\%/\%}   # prompt-pwd escapes '%' for prompt strings
       else
-        local pwd="${PWD/#$HOME/~}"
+        prompt_bryndin_tilde_pwd_reply
+        local pwd=$REPLY
         if [[ "$pwd" == (#m)[/~] ]]; then
           text="$MATCH"
           unset MATCH
@@ -469,7 +486,9 @@ function prompt_bryndin_async_callback {
   local rendered=$3
   [[ $rendered == $_prompt_bryndin_git ]] && return 0
   _prompt_bryndin_git=$rendered
-  prompt_bryndin_prepare_header
+  # A longer git block can make the header overflow; refit the directory
+  # instead of letting reflow drop the git block that just arrived.
+  prompt_bryndin_prepare_pwd
   prompt_bryndin_reflow
   # Only redraw when zle is active (the callback also fires in scripts).
   zle && zle reset-prompt
@@ -505,9 +524,15 @@ function prompt_bryndin_precmd {
   # block and the callback updates it; otherwise do it here synchronously.
   if (( _prompt_bryndin_async )); then
     # Do not show the previous repository's block while the worker catches up
-    # with a new directory.
-    if [[ -n $_prompt_bryndin_last_pwd && $PWD != $_prompt_bryndin_last_pwd ]]; then
-      _prompt_bryndin_git=''
+    # with a new directory.  Keep it when the new directory is still inside the
+    # same repository, so `cd src` does not blink the branch away.
+    if [[ -z $_prompt_bryndin_last_pwd || $PWD != $_prompt_bryndin_last_pwd ]]; then
+      local root=''
+      (( $+commands[git] )) && root=$(command git rev-parse --show-toplevel 2>/dev/null)
+      if [[ -n $_prompt_bryndin_last_pwd && $root != $_prompt_bryndin_git_root ]]; then
+        _prompt_bryndin_git=''
+      fi
+      _prompt_bryndin_git_root=$root
     fi
     if ! zpty -t prompt_bryndin &>/dev/null; then
       _prompt_bryndin_async=0
@@ -574,6 +599,11 @@ function prompt_bryndin_precmd {
 #
 function prompt_bryndin_resize {
   emulate -L zsh
+  # Chain a trap the user already had installed, then do our own refit.
+  if (( _prompt_bryndin_had_trapwinch )) && \
+     (( $+functions[_prompt_bryndin_user_trapwinch] )); then
+    _prompt_bryndin_user_trapwinch
+  fi
   [[ -n $_prompt_bryndin_header ]] || return 0
   # Recompute the directory fit from the full path so narrowing compresses it
   # and widening restores it, then repaint.
@@ -626,13 +656,15 @@ function prompt_bryndin_teardown {
     add-zle-hook-widget -d line-pre-redraw prompt_bryndin_line_pre_redraw
 
   # Restore the SIGWINCH trap only if it is still ours.
-  if (( _prompt_bryndin_trapwinch_installed )) && \
-     [[ $functions[TRAPWINCH] == *prompt_bryndin_resize* ]]; then
-    if (( _prompt_bryndin_had_trapwinch )); then
-      functions[TRAPWINCH]=$_prompt_bryndin_saved_trapwinch
-    else
-      unfunction TRAPWINCH 2>/dev/null
+  if (( _prompt_bryndin_trapwinch_installed )); then
+    if [[ $functions[TRAPWINCH] == *prompt_bryndin_resize* ]]; then
+      if (( _prompt_bryndin_had_trapwinch )); then
+        functions[TRAPWINCH]=$_prompt_bryndin_saved_trapwinch
+      else
+        unfunction TRAPWINCH 2>/dev/null
+      fi
     fi
+    unfunction _prompt_bryndin_user_trapwinch 2>/dev/null
   fi
 
   (( $+functions[async_stop_worker] )) && async_stop_worker prompt_bryndin 2>/dev/null
@@ -647,7 +679,7 @@ function prompt_bryndin_teardown {
     _prompt_bryndin_last_status _prompt_bryndin_status_text \
     _prompt_bryndin_color_pat _prompt_bryndin_trapwinch_installed \
     _prompt_bryndin_had_trapwinch _prompt_bryndin_saved_trapwinch \
-    _prompt_bryndin_last_pwd
+    _prompt_bryndin_last_pwd _prompt_bryndin_git_root
   zstyle -d ':prezto:module:prompt' managed
 }
 
@@ -674,14 +706,16 @@ function prompt_bryndin_setup {
   add-zle-hook-widget line-pre-redraw prompt_bryndin_line_pre_redraw
 
   # Reflow on SIGWINCH.  Save any existing trap so switching themes restores
-  # it instead of silently replacing the user's handler.
+  # it, and chain it while this theme is active.
   if (( ! _prompt_bryndin_trapwinch_installed )); then
     if (( $+functions[TRAPWINCH] )); then
       _prompt_bryndin_had_trapwinch=1
       _prompt_bryndin_saved_trapwinch=$functions[TRAPWINCH]
+      functions[_prompt_bryndin_user_trapwinch]=$functions[TRAPWINCH]
     else
       _prompt_bryndin_had_trapwinch=0
       _prompt_bryndin_saved_trapwinch=''
+      unfunction _prompt_bryndin_user_trapwinch 2>/dev/null
     fi
     TRAPWINCH() { prompt_bryndin_resize }
     _prompt_bryndin_trapwinch_installed=1

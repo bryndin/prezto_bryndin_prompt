@@ -70,4 +70,24 @@ prompt_bryndin_load_config
   print -u2 "FAIL: compressed-pwd did not override pwd: $_prompt_bryndin_conf[compressed-pwd]"; exit 1
 }
 
+# A sibling directory with the same prefix as HOME must not become "~...".
+local base=$(mktemp -d /tmp/opencode/bryndin-home.XXXXXX)
+mkdir -p "$base/alex/sub" "$base/alexander"
+local old_home=$HOME
+HOME="$base/alex"
+_prompt_bryndin_conf[compressed-pwd]='tilde'
+cd "$base/alexander" || exit 1
+[[ $(prompt_bryndin_pwd_text 0) == "$base/alexander" ]] || {
+  print -u2 "FAIL: sibling path was treated as HOME: $(prompt_bryndin_pwd_text 0)"; exit 1
+}
+cd "$HOME" || exit 1
+[[ $(prompt_bryndin_pwd_text 0) == '~' ]] || {
+  print -u2 "FAIL: exact HOME did not render as ~: $(prompt_bryndin_pwd_text 0)"; exit 1
+}
+cd "$HOME/sub" || exit 1
+[[ $(prompt_bryndin_pwd_text 0) == '~/sub' ]] || {
+  print -u2 "FAIL: HOME child did not render as ~/sub: $(prompt_bryndin_pwd_text 0)"; exit 1
+}
+HOME=$old_home
+
 print "PASS: PWD styles and prompt-pwd delegation work"

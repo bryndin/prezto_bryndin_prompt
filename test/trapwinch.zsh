@@ -29,13 +29,16 @@ local width_of() {
   print -r -- ${#${(S%%)s//$~zero/}}
 }
 
-local marker='ORIGINAL-TRAPWINCH'
-TRAPWINCH() { print -r -- ORIGINAL-TRAPWINCH }
+local marker='PROBE_USER_TRAP'
+PROBE_USER_TRAP=0
+TRAPWINCH() { PROBE_USER_TRAP=$(( PROBE_USER_TRAP + 1 )) }
 
 source "$theme"
 
 [[ $functions[TRAPWINCH] == *prompt_bryndin_resize* ]] || \
   fail "resize trap was not installed: $functions[TRAPWINCH]"
+(( $+functions[_prompt_bryndin_user_trapwinch] )) || \
+  fail "pre-existing trap was not saved for chaining"
 
 COLUMNS=80
 prompt_bryndin_precmd
@@ -45,10 +48,14 @@ COLUMNS=120
 prompt_bryndin_resize
 local after=$(width_of "$_prompt_bryndin_header")
 (( after > before )) || fail "header did not grow on resize ($before -> $after)"
+(( PROBE_USER_TRAP == 1 )) || \
+  fail "pre-existing TRAPWINCH was not chained (calls: $PROBE_USER_TRAP)"
 
 prompt_bryndin_teardown
 [[ $functions[TRAPWINCH] == *"$marker"* ]] || \
   fail "pre-existing TRAPWINCH was not restored: $functions[TRAPWINCH]"
+(( $+functions[_prompt_bryndin_user_trapwinch] == 0 )) || \
+  fail "saved trap helper was not removed"
 
 # With no pre-existing trap, teardown must remove ours.
 unfunction TRAPWINCH
@@ -57,4 +64,4 @@ prompt_bryndin_teardown
 (( $+functions[TRAPWINCH] == 0 )) || \
   fail "theme TRAPWINCH was not removed: $functions[TRAPWINCH]"
 
-print "PASS: resize trap reflows and is restored on teardown"
+print "PASS: resize trap reflows, chains, and is restored on teardown"
