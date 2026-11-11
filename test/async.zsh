@@ -17,9 +17,14 @@ function add-zle-hook-widget { : }
 # A fake zsh-async that records what the theme asks it to do.
 local helper_dir=$(mktemp -d /tmp/opencode/bryndin-async.XXXXXX)
 cat > "$helper_dir/async" <<'EOF'
-function async_start_worker { typeset -g ASYNC_TEST_STARTED=1 }
+function async_start_worker {
+  typeset -g ASYNC_TEST_STARTED=1
+  # The worker inherits the zstyle database at fork time; git-info formats must
+  # already be configured or it renders an empty block.
+  zstyle -s ':prezto:module:git:info:branch' format ASYNC_TEST_BRANCH_AT_START
+}
 function async_register_callback { typeset -g ASYNC_TEST_CALLBACK=$2 }
-function async_flush_jobs { : }
+function async_flush_jobs { typeset -g ASYNC_TEST_FLUSH=$1 }
 function async_job { typeset -g ASYNC_TEST_JOB=$2 }
 function async { : }
 function zpty { return 0 }
@@ -34,6 +39,9 @@ source "$theme"
 (( _prompt_bryndin_async == 1 )) || {
   print -u2 "FAIL: async mode was not enabled"; exit 1
 }
+[[ -n $ASYNC_TEST_BRANCH_AT_START ]] || {
+  print -u2 "FAIL: worker started before git-info zstyles were configured"; exit 1
+}
 (( ${ASYNC_TEST_STARTED:-0} == 1 )) || {
   print -u2 "FAIL: worker was not started"; exit 1
 }
@@ -43,6 +51,9 @@ source "$theme"
 
 COLUMNS=80
 prompt_bryndin_precmd
+[[ $ASYNC_TEST_FLUSH == prompt_bryndin ]] || {
+  print -u2 "FAIL: pending git jobs were not flushed"; exit 1
+}
 [[ $ASYNC_TEST_JOB == prompt_bryndin_async_git ]] || {
   print -u2 "FAIL: git job was not dispatched"; exit 1
 }

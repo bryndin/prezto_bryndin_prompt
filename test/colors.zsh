@@ -53,11 +53,23 @@ function pmodload { : }
 function add-zsh-hook { : }
 function add-zle-hook-widget { : }
 source "$theme"
-print -r -- "\$_prompt_bryndin_fg[time-color] \$_prompt_bryndin_fg[dir-color]"
+print -r -- "time=\$_prompt_bryndin_fg[time-color]"
+for spec in 1 4 15 16 21 231 232 244 255 256; do
+  print -r -- "\$spec=\$(prompt_bryndin_color_escape \$spec)"
+done
 EOF
 local downgraded=$(zsh "$child")
-[[ $downgraded == '%F{4}'* ]] || {
+[[ $downgraded == *'time=%F{4}'* ]] || {
   print -u2 "FAIL: numeric 256-colour index was not downgraded: $downgraded"; exit 1
 }
+local line
+for line in \
+  '1=%F{1}' '4=%F{4}' '15=%F{15}' \
+  '16=%F{0}' '21=%F{4}' '231=%F{7}' \
+  '232=%F{8}' '244=%F{7}' '255=%F{7}' '256=%F{default}'; do
+  [[ $downgraded == *"$line"* ]] || {
+    print -u2 "FAIL: 16-colour downgrade wrong for $line: $downgraded"; exit 1
+  }
+done
 
 print "PASS: NO_COLOR and 16-colour downgrade work"

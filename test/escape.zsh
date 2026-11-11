@@ -41,4 +41,14 @@ local escaped=$(prompt_bryndin_escape "$tricky")
   print -u2 "FAIL: command substitution not escaped: $escaped"; exit 1
 }
 
+# Backslashes and backticks are escaped too.
+local backslash=$(prompt_bryndin_escape 'x\y')
+[[ $backslash == 'x\\y' ]] || {
+  print -u2 "FAIL: backslash not escaped: $backslash"; exit 1
+}
+local backtick=$(prompt_bryndin_escape 'x`y')
+[[ $backtick == 'x\`y' ]] || {
+  print -u2 "FAIL: backtick not escaped: $backtick"; exit 1
+}
+
 print "PASS: dynamic text is escaped for prompt expansion"

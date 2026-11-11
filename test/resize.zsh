@@ -40,7 +40,7 @@ prompt_bryndin_precmd
 local before=$(width_of "$_prompt_bryndin_header")
 
 COLUMNS=120
-prompt_bryndin_line_pre_redraw
+prompt_bryndin_resize
 local after=$(width_of "$_prompt_bryndin_header")
 
 (( after > before )) || {

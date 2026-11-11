@@ -104,9 +104,11 @@ zstyle ':prezto:module:prompt:bryndin' time-format        '%T'
 # su/sudo are detected in 'auto' mode.
 zstyle ':prezto:module:prompt:bryndin' host               'auto'
 
+# Compression fallback used only when the full %~ path does not fit:
 # prompt-pwd | full | tilde.  'prompt-pwd' honours the framework-wide
 # ':prezto:module:prompt' pwd-length style (short | long | full).
-zstyle ':prezto:module:prompt:bryndin' pwd                'prompt-pwd'
+# `pwd' remains a deprecated alias for `compressed-pwd'.
+zstyle ':prezto:module:prompt:bryndin' compressed-pwd   'prompt-pwd'
 
 # Clip any single block to N display columns (0 disables clipping).
 zstyle ':prezto:module:prompt:bryndin' max-block-width     '0'
@@ -118,7 +120,8 @@ zstyle ':prezto:module:prompt:bryndin' history             'no'
 zstyle ':prezto:module:prompt:bryndin' duration            'no'
 zstyle ':prezto:module:prompt:bryndin' vim                 'yes'
 zstyle ':prezto:module:prompt:bryndin' overwrite           'yes'
-# ZLE keymap indicator (❯❯❯ / ❮❮❮) before the input line.
+# ZLE keymap indicator (❯❯❯ / ❮❮❮) before the input line.  A basic ❯ is
+# shown when this is off.
 zstyle ':prezto:module:prompt:bryndin' keymap-indicator    'no'
 
 # Collapse to a single line (drop the separator header).
@@ -141,7 +144,14 @@ Notes
 
 * Git status is collected synchronously by default. Enable `async` for large
   repositories; if the async helper is unavailable the theme falls back to
-  synchronous collection.
+  synchronous collection.  Async prompts may briefly show the previous
+  repository's git block until the worker returns; queued jobs are flushed on
+  each prompt so rapid directory changes do not build a backlog.
+* The header re-flows on terminal resize via a `TRAPWINCH` handler.  Any
+  pre-existing resize trap is saved and restored when the theme is torn down.
+* `compressed-pwd` only controls the overflow fallback.  The normal header
+  shows the full `%~` path and switches to the compressed form when it does not
+  fit.
 * As with other Prezto themes, git ref names and virtualenv names are inserted
   into a prompt string. Avoid literal `%` in ref names, or escape it in your
   `git:info:*` formats.

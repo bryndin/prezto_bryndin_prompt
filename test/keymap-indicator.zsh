@@ -20,6 +20,9 @@ source "$theme"
 [[ $PROMPT != *'editor_info[keymap]'* ]] || {
   print -u2 "FAIL: keymap indicator is on by default: $PROMPT"; exit 1
 }
+[[ $PROMPT == *'❯'* ]] || {
+  print -u2 "FAIL: default non-root prompt has no prompt character: $PROMPT"; exit 1
+}
 
 zstyle ':prezto:module:prompt:bryndin' keymap-indicator 'yes'
 prompt_bryndin_setup
@@ -27,4 +30,4 @@ prompt_bryndin_setup
   print -u2 "FAIL: keymap-indicator=yes ignored: $PROMPT"; exit 1
 }
 
-print "PASS: keymap indicator is opt-in"
+print "PASS: keymap indicator is opt-in and a prompt character remains"
