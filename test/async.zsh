@@ -66,4 +66,19 @@ prompt_bryndin_async_callback prompt_bryndin_async_git 0 'GITBLOCK'
   print -u2 "FAIL: callback did not rebuild the header"; exit 1
 }
 
+# Changing directories must drop the previous repository's block immediately;
+# the worker fills in the new one asynchronously.
+_prompt_bryndin_git='OLDGIT'
+_prompt_bryndin_last_pwd="$PWD/old"
+prompt_bryndin_precmd
+[[ -z $_prompt_bryndin_git ]] || {
+  print -u2 "FAIL: stale git block survived a directory change: $_prompt_bryndin_git"; exit 1
+}
+[[ $_prompt_bryndin_header != *OLDGIT* ]] || {
+  print -u2 "FAIL: stale git block still in the header"; exit 1
+}
+[[ $_prompt_bryndin_last_pwd == $PWD ]] || {
+  print -u2 "FAIL: last PWD was not updated"; exit 1
+}
+
 print "PASS: async git status works"

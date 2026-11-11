@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 #
-# The header must be re-flowed when the terminal width changes, without having
-# to run a command (precmd is not re-run on a redraw).
+# Resizing must re-fit both the header width and the directory compression:
+# narrowing the terminal compresses/clips the path, widening restores it.
 #
 emulate -LR zsh
 zmodload -i zsh/zutil
@@ -29,25 +29,44 @@ prompt_newline=$'\n%{\r%}'
 
 source "$theme"
 
+function fail {
+  print -u2 "FAIL: $*"
+  exit 1
+}
+
+# Non-interactive: treat ZLE as inactive so the resize handler does not call
+# the real widget.
+function zle { return 1 }
+
 local width_of() {
   local s=$1
   local zero='%([BSUbfksu]|([FBK]|){*})'
   print -r -- ${#${(S%%)s//$~zero/}}
 }
 
-COLUMNS=80
+local deep=$(mktemp -d /tmp/opencode/bryndin-resize.XXXXXX)
+mkdir -p "$deep/alpha/beta/gamma"
+cd "$deep/alpha/beta/gamma" || fail "could not enter the test directory"
+
+COLUMNS=200
 prompt_bryndin_precmd
-local before=$(width_of "$_prompt_bryndin_header")
+[[ $_prompt_bryndin_cur_dir == '%~' ]] || \
+  fail "wide header did not start from the full path: $_prompt_bryndin_cur_dir"
+local wide_before=$(width_of "$_prompt_bryndin_header")
+(( wide_before <= 200 )) || fail "wide header overflows: $wide_before > 200"
 
-COLUMNS=120
+COLUMNS=40
 prompt_bryndin_resize
-local after=$(width_of "$_prompt_bryndin_header")
+[[ $_prompt_bryndin_cur_dir != '%~' ]] || \
+  fail "narrow resize did not compress the path"
+local narrow=$(width_of "$_prompt_bryndin_header")
+(( narrow <= 40 )) || fail "narrow header overflows: $narrow > 40"
 
-(( after > before )) || {
-  print -u2 "FAIL: header did not grow after resize ($before -> $after)"; exit 1
-}
-(( after <= 122 )) || {
-  print -u2 "FAIL: header overflows after resize ($after > 122)"; exit 1
-}
+COLUMNS=200
+prompt_bryndin_resize
+[[ $_prompt_bryndin_cur_dir == '%~' ]] || \
+  fail "wide resize did not restore the full path: $_prompt_bryndin_cur_dir"
+local wide_after=$(width_of "$_prompt_bryndin_header")
+(( wide_after <= 200 )) || fail "restored header overflows: $wide_after > 200"
 
-print "PASS: header re-flows on redraw after a terminal resize"
+print "PASS: header and PWD re-fit on terminal resize"
