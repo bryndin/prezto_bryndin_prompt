@@ -34,6 +34,14 @@ prompt_bryndin_full_pwd_reply
 [[ $(prompt_bryndin_pwd_text) == 'FROM-PROMPT-PWD' ]] || {
   print -u2 "FAIL: prompt-pwd helper was not used: $(prompt_bryndin_pwd_text)"; exit 1
 }
+prompt_bryndin_pwd_text_reply
+[[ $REPLY == "$(prompt_bryndin_pwd_text)" ]] || {
+  print -u2 "FAIL: pwd reply differs: $REPLY != $(prompt_bryndin_pwd_text)"; exit 1
+}
+prompt_bryndin_compressed_pwd_reply
+[[ $REPLY == "$(prompt_bryndin_prepare_compressed_pwd)" ]] || {
+  print -u2 "FAIL: compressed reply differs: $REPLY != $(prompt_bryndin_prepare_compressed_pwd)"; exit 1
+}
 
 _prompt_bryndin_conf[compressed-pwd]='tilde'
 local expected=${PWD/#$HOME/\~}

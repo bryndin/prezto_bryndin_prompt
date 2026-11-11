@@ -113,6 +113,10 @@ zstyle ':prezto:module:prompt:bryndin' compressed-pwd   'prompt-pwd'
 # Clip any single block to N display columns (0 disables clipping).
 zstyle ':prezto:module:prompt:bryndin' max-block-width     '0'
 
+# Leave N columns free at the right edge.  Useful on terminals that wrap
+# immediately when the last column is filled; modern emulators use 0.
+zstyle ':prezto:module:prompt:bryndin' margin              '0'
+
 # Second-line indicators (yes/no).
 zstyle ':prezto:module:prompt:bryndin' exit-status         'yes'
 zstyle ':prezto:module:prompt:bryndin' jobs                'yes'

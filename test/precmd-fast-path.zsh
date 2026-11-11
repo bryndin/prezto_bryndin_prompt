@@ -28,8 +28,8 @@ function prompt_bryndin_full_pwd_reply {
   (( pwd_calls++ ))
   REPLY='STUB-PWD'
 }
-function prompt_bryndin_prepare_virtualenv {
-  print -rn -- 'STUB-VENV'
+function prompt_bryndin_virtualenv_reply {
+  REPLY='STUB-VENV'
 }
 
 COLUMNS=200

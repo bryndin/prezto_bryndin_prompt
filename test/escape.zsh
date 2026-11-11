@@ -23,6 +23,10 @@ local block=$(prompt_bryndin_prepare_virtualenv)
 [[ $block == *'100%%done'* ]] || {
   print -u2 "FAIL: venv name not escaped: $block"; exit 1
 }
+prompt_bryndin_virtualenv_reply
+[[ $REPLY == "$block" ]] || {
+  print -u2 "FAIL: virtualenv reply differs: $REPLY != $block"; exit 1
+}
 
 COLUMNS=80
 prompt_bryndin_precmd
@@ -45,6 +49,10 @@ local escaped=$(prompt_bryndin_escape "$tricky")
 local backslash=$(prompt_bryndin_escape 'x\y')
 [[ $backslash == 'x\\y' ]] || {
   print -u2 "FAIL: backslash not escaped: $backslash"; exit 1
+}
+prompt_bryndin_escape_reply 'x\y'
+[[ $REPLY == "$backslash" ]] || {
+  print -u2 "FAIL: escape reply differs: $REPLY != $backslash"; exit 1
 }
 local backtick=$(prompt_bryndin_escape 'x`y')
 [[ $backtick == 'x\`y' ]] || {

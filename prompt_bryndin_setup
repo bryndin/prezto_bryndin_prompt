@@ -71,6 +71,7 @@ function prompt_bryndin_load_config {
     compressed-pwd    ''
     colors            'auto'
     max-block-width   '0'
+    margin            '0'
     async             'no'
     exit-status       'yes'
     jobs              'yes'
@@ -187,30 +188,43 @@ pmodload 'helper' 'python' 'git'
 #
 # Escape plain text for safe embedding in a prompt string.  '%' would
 # otherwise be interpreted as a prompt escape by the expansion pass; '$', '\'
-# and backticks are escaped too for defence in depth.  A character loop is used
-# deliberately: nested ${...//...} replacements are easy to get wrong here.
+# and backticks are escaped too for defence in depth.  The *_reply form sets
+# REPLY so callers can avoid a subshell; the print form remains for tests and
+# backwards compatibility.
 #
-function prompt_bryndin_escape {
+function prompt_bryndin_escape_reply {
   emulate -L zsh
-  local str=$1
-  str=${str//\\/\\\\}
-  str=${str//\%/\%\%}
-  str=${str//\$/\\\$}
-  str=${str//\`/\\\`}
-  print -rn -- "$str"
+  REPLY=$1
+  REPLY=${REPLY//\\/\\\\}
+  REPLY=${REPLY//\%/\%\%}
+  REPLY=${REPLY//\$/\\\$}
+  REPLY=${REPLY//\`/\\\`}
+}
+
+function prompt_bryndin_escape {
+  prompt_bryndin_escape_reply "$1"
+  print -rn -- "$REPLY"
 }
 
 #
 # Build the virtualenv block from the environment variables directly, so the
 # name can be escaped.  (python-info's %v format inserts it verbatim.)
 #
-function prompt_bryndin_prepare_virtualenv {
+function prompt_bryndin_virtualenv_reply {
   emulate -L zsh
   local name=${VIRTUAL_ENV:t}
   [[ -z $name ]] && name=$CONDA_DEFAULT_ENV
-  [[ -z $name ]] && return 0
-  local safe=$(prompt_bryndin_escape "$name")
-  print -rn -- "${_prompt_bryndin_fg[main-color]}─<${_prompt_bryndin_fg[virtualenv-color]}${safe}${_prompt_bryndin_fg[main-color]}>${_prompt_bryndin_fg[reset]}"
+  if [[ -z $name ]]; then
+    REPLY=''
+    return 0
+  fi
+  prompt_bryndin_escape_reply "$name"
+  REPLY="${_prompt_bryndin_fg[main-color]}─<${_prompt_bryndin_fg[virtualenv-color]}${REPLY}${_prompt_bryndin_fg[main-color]}>${_prompt_bryndin_fg[reset]}"
+}
+
+function prompt_bryndin_prepare_virtualenv {
+  prompt_bryndin_virtualenv_reply
+  print -rn -- "$REPLY"
 }
 
 #
@@ -218,11 +232,13 @@ function prompt_bryndin_prepare_virtualenv {
 # characters, not terminal columns, so wide (e.g. CJK) glyphs are measured
 # with ${(m)#...} instead.
 #
-function prompt_bryndin_clip {
+function prompt_bryndin_clip_reply {
   emulate -L zsh
   local text=$1 max=$2
-  (( max <= 0 )) && { print -rn -- "$text"; return 0 }
-  (( ${(m)#text} <= max )) && { print -rn -- "$text"; return 0 }
+  if (( max <= 0 || ${(m)#text} <= max )); then
+    REPLY=$text
+    return 0
+  fi
 
   local -a chars=( ${(s::)text} )
   local out='' c width=0 cw
@@ -232,7 +248,12 @@ function prompt_bryndin_clip {
     out+=$c
     (( width += cw ))
   done
-  print -rn -- "${out}…"
+  REPLY="${out}…"
+}
+
+function prompt_bryndin_clip {
+  prompt_bryndin_clip_reply "$@"
+  print -rn -- "$REPLY"
 }
 
 #
@@ -302,7 +323,7 @@ function prompt_bryndin_tilde_pwd_reply {
 # ':prezto:module:prompt' pwd-length style.  `pwd' remains a compatibility
 # alias for `compressed-pwd'.
 #
-function prompt_bryndin_pwd_text {
+function prompt_bryndin_pwd_text_reply {
   emulate -L zsh
   setopt EXTENDED_GLOB
   local style=$_prompt_bryndin_conf[compressed-pwd]
@@ -334,20 +355,34 @@ function prompt_bryndin_pwd_text {
       ;;
   esac
 
-  (( max > 0 )) && text=$(prompt_bryndin_clip "$text" "$max")
-  print -rn -- "${text//\%/%%}"
+  if (( max > 0 )); then
+    prompt_bryndin_clip_reply "$text" "$max"
+    text=$REPLY
+  fi
+  REPLY="${text//\%/%%}"
 }
 
-function prompt_bryndin_prepare_compressed_pwd {
-  local text=$(prompt_bryndin_pwd_text "$1")
+function prompt_bryndin_pwd_text {
+  prompt_bryndin_pwd_text_reply "$@"
+  print -rn -- "$REPLY"
+}
+
+function prompt_bryndin_compressed_pwd_reply {
+  prompt_bryndin_pwd_text_reply "$1"
+  local text=$REPLY
 
   # Keep the "no write permission" highlight in the compressed representation
   # too; otherwise the feature silently disappears on long paths.
   if [[ -w $PWD ]]; then
-    print -rn -- "$text"
+    REPLY=$text
   else
-    print -rn -- "${_prompt_bryndin_fg[error-color]}${text}${_prompt_bryndin_fg[reset]}"
+    REPLY="${_prompt_bryndin_fg[error-color]}${text}${_prompt_bryndin_fg[reset]}"
   fi
+}
+
+function prompt_bryndin_prepare_compressed_pwd {
+  prompt_bryndin_compressed_pwd_reply "$@"
+  print -rn -- "$REPLY"
 }
 
 #
@@ -364,7 +399,11 @@ function prompt_bryndin_measure {
   # Never produce a negative filler (which would make the padding expression
   # fail and leave the header wider than the terminal).  Track the overflow
   # separately: it drives the compressed-PWD fallback and block clipping.
-  local width=$(( $COLUMNS - $left_width - $right_width ))
+  # `margin' is an opt-in safety gap for terminals that wrap immediately when
+  # the last column is filled.
+  local margin=${_prompt_bryndin_conf[margin]:-0}
+  [[ $margin == <-> ]] || margin=0
+  local width=$(( $COLUMNS - $left_width - $right_width - margin ))
   _prompt_bryndin_filler_width=$(( width > 0 ? width : 0 ))
   _prompt_bryndin_overflow=$(( width < 0 ? -width : 0 ))
 }
@@ -402,18 +441,21 @@ function prompt_bryndin_prepare_pwd {
 
   # Fall back to the compressed directory if the blocks are not fitting.
   if (( _prompt_bryndin_overflow > 0 )); then
-    _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd)"
+    prompt_bryndin_compressed_pwd_reply
+    _prompt_bryndin_cur_dir=$REPLY
     prompt_bryndin_prepare_header
   fi
 
   # If it still does not fit, clip the directory by the remaining deficit so
   # the line never wraps.  prompt-pwd's '%%' escaping is undone for measuring
-  # and re-applied by prompt_bryndin_pwd_text afterwards.
+  # and re-applied by prompt_bryndin_pwd_text_reply afterwards.
   if (( _prompt_bryndin_overflow > 0 )); then
-    local plain=$(prompt_bryndin_pwd_text 0)
+    prompt_bryndin_pwd_text_reply 0
+    local plain=$REPLY
     local keep=$(( ${(m)#${plain//\%\%/\%}} - _prompt_bryndin_overflow ))
     (( keep < 1 )) && keep=1
-    _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_compressed_pwd $keep)"
+    prompt_bryndin_compressed_pwd_reply $keep
+    _prompt_bryndin_cur_dir=$REPLY
     prompt_bryndin_prepare_header
   fi
 }
@@ -559,9 +601,10 @@ function prompt_bryndin_precmd {
   # is built from the environment variables so the name can be escaped.
   (( $+functions[python-info] )) && python-info
   if [[ -n ${VIRTUAL_ENV:-} || -n ${CONDA_DEFAULT_ENV:-} ]]; then
-    _prompt_bryndin_venv=$(prompt_bryndin_prepare_virtualenv)
+    prompt_bryndin_virtualenv_reply
+    _prompt_bryndin_venv=$REPLY
   else
-    # Skip the helper (and its subshell) when no environment is active.
+    # Skip the helper when no environment is active.
     _prompt_bryndin_venv=''
   fi
 

@@ -34,5 +34,19 @@ local clipped=$(prompt_bryndin_clip 'abcdefghij' 5)
 [[ $clipped == *'…'* ]] || {
   print -u2 "FAIL: clipped text has no ellipsis"; exit 1
 }
+prompt_bryndin_clip_reply 'abcdefghij' 5
+[[ $REPLY == "$clipped" ]] || {
+  print -u2 "FAIL: clip reply differs: $REPLY != $clipped"; exit 1
+}
+
+# Optional right margin.
+COLUMNS=20
+_prompt_bryndin_conf[margin]='1'
+_prompt_bryndin_left_expanded='AB'
+_prompt_bryndin_right_expanded=''
+prompt_bryndin_measure "$_prompt_bryndin_left_expanded" "$_prompt_bryndin_right_expanded"
+(( _prompt_bryndin_filler_width == 17 )) || {
+  print -u2 "FAIL: margin not applied (filler=$_prompt_bryndin_filler_width)"; exit 1
+}
 
 print "PASS: display-column widths and clipping work"
