@@ -249,15 +249,21 @@ function prompt_bryndin_is_remote {
   return 1
 }
 
+function prompt_bryndin_full_pwd_reply {
+  # Set REPLY instead of printing so precmd can avoid a command substitution.
+  if [[ -w $PWD ]]; then
+    REPLY='%~'
+  else
+    REPLY="${_prompt_bryndin_fg[error-color]}%~${_prompt_bryndin_fg[reset]}"
+  fi
+}
+
 function prompt_bryndin_prepare_full_pwd {
   # %~ abbreviates $HOME, matching the compressed representation.  It is a
   # prompt escape, so zsh resolves it at draw time and prompt_bryndin_measure
   # expands it when computing the width.
-  if [[ -w $PWD ]]; then
-    print -n -- '%~'
-  else
-    print -n -- "${_prompt_bryndin_fg[error-color]}%~${_prompt_bryndin_fg[reset]}"
-  fi
+  prompt_bryndin_full_pwd_reply
+  print -n -- "$REPLY"
 }
 
 #
@@ -463,8 +469,9 @@ function prompt_bryndin_precmd {
     _prompt_bryndin_duration_text=''
   fi
 
-  # Format PWD.
-  _prompt_bryndin_cur_dir="$(prompt_bryndin_prepare_full_pwd)"
+  # Format PWD.  Use the REPLY variant to avoid a subshell fork per prompt.
+  prompt_bryndin_full_pwd_reply
+  _prompt_bryndin_cur_dir=$REPLY
 
   # Get Git repository information.  In async mode the worker renders the
   # block and the callback updates it; otherwise do it here synchronously.
@@ -492,7 +499,12 @@ function prompt_bryndin_precmd {
   # interpreter is installed, so python-info may not exist.  The block itself
   # is built from the environment variables so the name can be escaped.
   (( $+functions[python-info] )) && python-info
-  _prompt_bryndin_venv=$(prompt_bryndin_prepare_virtualenv)
+  if [[ -n ${VIRTUAL_ENV:-} || -n ${CONDA_DEFAULT_ENV:-} ]]; then
+    _prompt_bryndin_venv=$(prompt_bryndin_prepare_virtualenv)
+  else
+    # Skip the helper (and its subshell) when no environment is active.
+    _prompt_bryndin_venv=''
+  fi
 
   # Keep the exit-status text in a variable instead of relying on %? at draw
   # time. ZLE redraws can otherwise see the status of a prompt hook rather

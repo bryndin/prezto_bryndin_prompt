@@ -22,6 +22,13 @@ source "$theme"
 [[ $(prompt_bryndin_prepare_full_pwd) == *'%~'* ]] || {
   print -u2 "FAIL: full PWD does not use %~"; exit 1
 }
+prompt_bryndin_full_pwd_reply
+[[ $REPLY == *'%~'* ]] || {
+  print -u2 "FAIL: REPLY did not receive %~: $REPLY"; exit 1
+}
+[[ $(prompt_bryndin_prepare_full_pwd) == "$REPLY" ]] || {
+  print -u2 "FAIL: print and REPLY forms disagree: $(prompt_bryndin_prepare_full_pwd) != $REPLY"; exit 1
+}
 
 # default style delegates to prompt-pwd
 [[ $(prompt_bryndin_pwd_text) == 'FROM-PROMPT-PWD' ]] || {
