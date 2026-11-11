@@ -22,6 +22,7 @@ function async_register_callback { typeset -g ASYNC_TEST_CALLBACK=$2 }
 function async_flush_jobs { : }
 function async_job { typeset -g ASYNC_TEST_JOB=$2 }
 function async { : }
+function zpty { return 0 }
 async "$@"
 EOF
 fpath=( "$helper_dir" $fpath )

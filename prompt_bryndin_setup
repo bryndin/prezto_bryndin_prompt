@@ -25,6 +25,8 @@ typeset -ga _prompt_bryndin_blocks
 typeset -g  _prompt_bryndin_monochrome=0
 typeset -g  _prompt_bryndin_cmd_start=0
 typeset -g  _prompt_bryndin_duration_text=''
+typeset -g  _prompt_bryndin_last_status=0
+typeset -g  _prompt_bryndin_status_text=''
 typeset -g  _prompt_bryndin_git=''
 typeset -g  _prompt_bryndin_venv=''
 typeset -g  _prompt_bryndin_async=0
@@ -392,6 +394,7 @@ function prompt_bryndin_reflow {
   _prompt_bryndin_header="${left}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${right}"
   (( _prompt_bryndin_monochrome )) && \
     _prompt_bryndin_header=$(prompt_bryndin_strip_colors "$_prompt_bryndin_header")
+  return 0
 }
 
 #
@@ -408,6 +411,15 @@ function prompt_bryndin_async_git {
 
 function prompt_bryndin_async_callback {
   emulate -L zsh
+
+  # zsh-async reports worker failures as [async]. Stop using the worker and
+  # fall back to synchronous git collection instead of printing errors on
+  # every prompt.
+  if [[ $1 == '[async]' ]]; then
+    _prompt_bryndin_async=0
+    return 0
+  fi
+
   [[ $1 == prompt_bryndin_async_git ]] || return 0
   local rendered=$3
   [[ $rendered == $_prompt_bryndin_git ]] && return 0
@@ -419,7 +431,16 @@ function prompt_bryndin_async_callback {
 }
 
 function prompt_bryndin_preexec {
+  # Clear the previous command's status as soon as a new command is accepted.
+  _prompt_bryndin_status_text=''
   _prompt_bryndin_cmd_start=$SECONDS
+}
+
+# Runs first in the precmd chain, before other hooks can overwrite $?. The
+# prompt's %( ?..) indicator must reflect the user's last command, not the
+# status of a highlight/autosuggestion/precmd helper.
+function prompt_bryndin_precmd_status {
+  _prompt_bryndin_last_status=$?
 }
 
 function prompt_bryndin_precmd {
@@ -441,9 +462,14 @@ function prompt_bryndin_precmd {
   # Get Git repository information.  In async mode the worker renders the
   # block and the callback updates it; otherwise do it here synchronously.
   if (( _prompt_bryndin_async )); then
-    async_flush_jobs prompt_bryndin
-    async_job prompt_bryndin prompt_bryndin_async_git "$PWD"
-  else
+    if ! zpty -t prompt_bryndin &>/dev/null; then
+      _prompt_bryndin_async=0
+    elif ! async_job prompt_bryndin prompt_bryndin_async_git "$PWD"; then
+      _prompt_bryndin_async=0
+    fi
+  fi
+
+  if (( ! _prompt_bryndin_async )); then
     (( $+functions[git-info] )) && git-info
     _prompt_bryndin_git=''
     [[ -n $git_info[prompt] ]] && _prompt_bryndin_git=${(e)git_info[prompt]}
@@ -454,6 +480,22 @@ function prompt_bryndin_precmd {
   # is built from the environment variables so the name can be escaped.
   (( $+functions[python-info] )) && python-info
   _prompt_bryndin_venv=$(prompt_bryndin_prepare_virtualenv)
+
+  # Keep the exit-status text in a variable instead of relying on %? at draw
+  # time. ZLE redraws can otherwise see the status of a prompt hook rather
+  # than the user's command.
+  if [[ $_prompt_bryndin_conf[exit-status] == yes ]]; then
+    if (( _prompt_bryndin_last_status != 0 )); then
+      local code=''
+      [[ $_prompt_bryndin_conf[show-return-code] == yes ]] && \
+        code="${_prompt_bryndin_last_status} "
+      _prompt_bryndin_status_text="${_prompt_bryndin_fg[error-color]}✘ ${code}${_prompt_bryndin_fg[reset]}"
+    else
+      _prompt_bryndin_status_text=''
+    fi
+  else
+    _prompt_bryndin_status_text=''
+  fi
 
   # Prepare header line
   prompt_bryndin_prepare_header
@@ -476,6 +518,7 @@ function prompt_bryndin_precmd {
   # PROMPT rather than printed by precmd, so it survives clear-screen,
   # reset-prompt, vi keymap switches and terminal resizes.
   prompt_bryndin_reflow
+  return ${_prompt_bryndin_last_status:-0}
 }
 
 #
@@ -486,6 +529,9 @@ function prompt_bryndin_precmd {
 function prompt_bryndin_line_pre_redraw {
   emulate -L zsh
   [[ -n $_prompt_bryndin_header ]] || return 0
+  # Once the user starts editing a new command, drop the previous command's
+  # status from RPROMPT. The next precmd will set the new status.
+  [[ -n ${BUFFER:-} ]] && _prompt_bryndin_status_text=''
   prompt_bryndin_reflow
 }
 
@@ -507,7 +553,9 @@ function prompt_bryndin_teardown {
   emulate -L zsh
   if (( $+functions[add-zsh-hook] )); then
     add-zsh-hook -d precmd prompt_bryndin_precmd
+    add-zsh-hook -d precmd prompt_bryndin_precmd_status
     add-zsh-hook -d preexec prompt_bryndin_preexec
+    precmd_functions=(${precmd_functions:#prompt_bryndin_precmd_status})
   fi
   (( $+functions[add-zle-hook-widget] )) && \
     add-zle-hook-widget -d line-pre-redraw prompt_bryndin_line_pre_redraw
@@ -520,6 +568,7 @@ function prompt_bryndin_teardown {
     _prompt_bryndin_filler_width _prompt_bryndin_overflow _prompt_bryndin_monochrome \
     _prompt_bryndin_cmd_start _prompt_bryndin_duration_text \
     _prompt_bryndin_git _prompt_bryndin_venv _prompt_bryndin_async \
+    _prompt_bryndin_last_status _prompt_bryndin_status_text \
     _prompt_bryndin_color_pat
   zstyle -d ':prezto:module:prompt' managed
 }
@@ -548,14 +597,16 @@ function prompt_bryndin_setup {
     if [[ -n $async_file ]]; then
       autoload -Uz async && async
       if (( $+functions[async_start_worker] )); then
-        async_start_worker prompt_bryndin -n
-        async_register_callback prompt_bryndin prompt_bryndin_async_callback
-        _prompt_bryndin_async=1
+        if async_start_worker prompt_bryndin -n -u; then
+          async_register_callback prompt_bryndin prompt_bryndin_async_callback
+          _prompt_bryndin_async=1
+        fi
       fi
     fi
   fi
 
   # Add hook for calling git-info before each command.
+  precmd_functions=(prompt_bryndin_precmd_status ${precmd_functions:#prompt_bryndin_precmd_status})
   add-zsh-hook precmd prompt_bryndin_precmd
   add-zsh-hook preexec prompt_bryndin_preexec
   add-zle-hook-widget line-pre-redraw prompt_bryndin_line_pre_redraw
@@ -672,13 +723,11 @@ function prompt_bryndin_setup {
   fi
 
   # Last command status on the right of the input line.  The numeric code is
-  # opt-in through the framework-wide show-return-val style.
+  # opt-in through the framework-wide show-return-val style. The value is
+  # computed in precmd so ZLE redraws do not pick up a helper's status.
   RPROMPT=''
-  if [[ $_prompt_bryndin_conf[exit-status] == yes ]]; then
-    local code=''
-    [[ $_prompt_bryndin_conf[show-return-code] == yes ]] && code='%? '
-    RPROMPT="%(?..${_prompt_bryndin_fg[error-color]}✘ ${code}${_prompt_bryndin_fg[reset]})"
-  fi
+  [[ $_prompt_bryndin_conf[exit-status] == yes ]] && \
+    RPROMPT='${_prompt_bryndin_status_text}'
 
   # Optional context indicators.  All are prompt strings: %-escapes and ${...}
   # are evaluated by zsh at draw time, not at setup time.

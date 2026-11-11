@@ -13,17 +13,29 @@ function add-zle-hook-widget { : }
 
 source "$theme"
 
-[[ $RPROMPT == *'%(?..'* ]] || {
+[[ $RPROMPT == *'_prompt_bryndin_status_text'* ]] || {
   print -u2 "FAIL: no exit-status indicator: $RPROMPT"; exit 1
 }
 [[ $RPROMPT != *'%?'* ]] || {
   print -u2 "FAIL: numeric code shown by default"; exit 1
 }
 
+# A failed command should produce the status indicator.
+_prompt_bryndin_last_status=2
+prompt_bryndin_precmd
+[[ $_prompt_bryndin_status_text == *'✘'* ]] || {
+  print -u2 "FAIL: failed status not rendered"; exit 1
+}
+[[ $_prompt_bryndin_status_text != *'2 '* ]] || {
+  print -u2 "FAIL: numeric code shown by default"; exit 1
+}
+
 zstyle ':prezto:module:prompt' show-return-val 'yes'
 prompt_bryndin_setup
-[[ $RPROMPT == *'%?'* ]] || {
-  print -u2 "FAIL: show-return-val ignored: $RPROMPT"; exit 1
+_prompt_bryndin_last_status=2
+prompt_bryndin_precmd
+[[ $_prompt_bryndin_status_text == *'2 '* ]] || {
+  print -u2 "FAIL: show-return-val ignored: $_prompt_bryndin_status_text"; exit 1
 }
 
 zstyle ':prezto:module:prompt:bryndin' exit-status 'no'
