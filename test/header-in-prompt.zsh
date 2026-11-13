@@ -15,11 +15,6 @@ local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 function pmodload { : }
 function add-zsh-hook { : }
 function add-zle-hook-widget { : }
-function coalesce {
-  local a
-  for a in "$@"; do [[ -n $a ]] && { print -rn -- "$a"; return 0 }; done
-  return 1
-}
 function python-info { python_info=(virtualenv '') }
 
 typeset -gA git_info python_info editor_info

@@ -38,14 +38,6 @@ function async_register_callback { : }
 function async_flush_jobs { : }
 function async_job { : }
 
-function coalesce {
-  local a
-  for a in "$@"; do
-    [[ -n $a ]] && { print -rn -- "$a"; return 0 }
-  done
-  return 1
-}
-
 function escape-eval {
   emulate -L zsh
   setopt EXTENDED_GLOB
@@ -73,16 +65,23 @@ python_info=()
 editor_info=(keymap '❯❯❯')
 
 # Exercise the configured git:info:keys format the way real git-info does:
-# zformat substitutes %b/%p/%c/... and leaves $(...) for later evaluation.
+# zformat substitutes the raw branch/position/commit keys and the status
+# fragment; the theme assembles them without eval.
 function git-info {
   emulate -L zsh
   local -a fmts
-  local key fmt
+  local key fmt branch_formatted commit_formatted position_formatted
   git_info=()
+  zstyle -s ':prezto:module:git:info:branch' format fmt
+  zformat -f branch_formatted "$fmt" "b:main"
+  zstyle -s ':prezto:module:git:info:commit' format fmt
+  zformat -f commit_formatted "$fmt" "c:1a2b3c4"
+  zstyle -s ':prezto:module:git:info:position' format fmt
+  zformat -f position_formatted "$fmt" "p:"
   zstyle -a ':prezto:module:git:info:keys' format fmts || return 1
   for key fmt in "$fmts[@]"; do
     zformat -f REPLY "$fmt" \
-      "b::%F{green}main%f" "p:" "c::%F{green}1a2b3c4%f" \
+      "b:$branch_formatted" "p:$position_formatted" "c:$commit_formatted" \
       "s:" "A:" "B:" "S:" "a:" "d:" "m:" "r:" "U:" "u:" \
       "C:" "D:" "R:" "i:" "I:"
     git_info[$key]="$REPLY"

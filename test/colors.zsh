@@ -5,6 +5,7 @@
 #
 emulate -LR zsh
 zmodload -i zsh/zutil
+zmodload -i zsh/terminfo
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
 # Keep the caller's virtualenv out of the header.
@@ -41,13 +42,43 @@ zstyle -s ':prezto:module:editor:info:keymap:primary' format keymap
   print -u2 "FAIL: editor keymap still contains %F escapes: $keymap"; exit 1
 }
 
+# Literal escaped percent pairs must survive monochrome stripping: a directory
+# named "%F{red}" is text, not a colour escape.
+local stripped=$(prompt_bryndin_strip_colors 'x%%F{red}y')
+[[ $stripped == 'x%%F{red}y' ]] || {
+  print -u2 "FAIL: monochrome strip corrupted a literal escape: $stripped"; exit 1
+}
+stripped=$(prompt_bryndin_strip_colors 'x%F{red}y')
+[[ $stripped == 'xy' ]] || {
+  print -u2 "FAIL: monochrome strip left a real colour escape: $stripped"; exit 1
+}
+
+local saved_left=$_prompt_bryndin_left_expanded
+local saved_right=$_prompt_bryndin_right_expanded
+_prompt_bryndin_left_expanded=''
+_prompt_bryndin_right_expanded='[x%%F{red}y]'
+COLUMNS=40
+prompt_bryndin_reflow
+[[ $_prompt_bryndin_header == *'x%%F{red}y'* ]] || {
+  print -u2 "FAIL: reflow stripped a literal escape: $_prompt_bryndin_header"; exit 1
+}
+local header_rendered=$(print -P -- "$_prompt_bryndin_header")
+[[ $header_rendered == *'x%F{red}y'* ]] || {
+  print -u2 "FAIL: literal escape did not render: $header_rendered"; exit 1
+}
+_prompt_bryndin_left_expanded=$saved_left
+_prompt_bryndin_right_expanded=$saved_right
+
 # --- 16-colour downgrade ---------------------------------------------------
 # Reload in a clean child so the earlier zstyles/variables do not leak.
 local child=$(mktemp /tmp/opencode/bryndin-colors.XXXXXX)
 cat > "$child" <<EOF
 emulate -LR zsh
 zmodload -i zsh/zutil
+zmodload -i zsh/terminfo
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT
+export TERM=xterm-256color
+unset COLORTERM
 zstyle ':prezto:module:prompt:bryndin' colors '16'
 function pmodload { : }
 function add-zsh-hook { : }
@@ -71,5 +102,43 @@ for line in \
     print -u2 "FAIL: 16-colour downgrade wrong for $line: $downgraded"; exit 1
   }
 done
+
+# --- 8-colour downgrade and COLORTERM=truecolor ----------------------------
+local child8=$(mktemp /tmp/opencode/bryndin-colors8.XXXXXX)
+cat > "$child8" <<EOF
+emulate -LR zsh
+zmodload -i zsh/zutil
+zmodload -i zsh/terminfo
+setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT
+export TERM=xterm
+unset COLORTERM
+zstyle ':prezto:module:prompt:bryndin' colors 'auto'
+function pmodload { : }
+function add-zsh-hook { : }
+function add-zle-hook-widget { : }
+source "$theme"
+print -r -- "ncolors=\${terminfo[colors]:-0}"
+for spec in 8 9 15 16 232 244 27; do
+  print -r -- "\$spec=\$(prompt_bryndin_color_escape \$spec)"
+done
+COLORTERM=truecolor
+print -r -- "truecolor=\$(prompt_bryndin_color_escape 27)"
+EOF
+local out8=$(zsh "$child8")
+if [[ $out8 == *'ncolors=8'* ]]; then
+  for line in \
+    '8=%F{0}' '9=%F{1}' '15=%F{7}' \
+    '16=%F{0}' '232=%F{0}' '244=%F{7}' '27=%F{4}'; do
+    [[ $out8 == *"$line"* ]] || {
+      print -u2 "FAIL: 8-colour downgrade wrong for $line: $out8"; exit 1
+    }
+  done
+  # A truecolor-capable terminal is not downgraded just because terminfo says 8.
+  [[ $out8 == *'truecolor=%F{27}'* ]] || {
+    print -u2 "FAIL: COLORTERM=truecolor was downgraded: $out8"; exit 1
+  }
+else
+  print "SKIP: TERM=xterm does not advertise 8 colours here"
+fi
 
 print "PASS: NO_COLOR and 16-colour downgrade work"

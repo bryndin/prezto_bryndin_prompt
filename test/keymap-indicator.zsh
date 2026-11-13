@@ -23,6 +23,11 @@ source "$theme"
 [[ $PROMPT == *'❯'* ]] || {
   print -u2 "FAIL: default non-root prompt has no prompt character: $PROMPT"; exit 1
 }
+local rendered=$(print -P -- "$PROMPT")
+rendered=${rendered//$'\e'\[[0-9;]#m/}
+[[ $rendered == *'❯ ' ]] || {
+  print -u2 "FAIL: typed text would sit against the prompt character"; exit 1
+}
 
 zstyle ':prezto:module:prompt:bryndin' keymap-indicator 'yes'
 prompt_bryndin_setup

@@ -31,14 +31,39 @@ source "$theme"
 SECONDS=100
 prompt_bryndin_preexec
 SECONDS=103
+_prompt_bryndin_last_status=0
 prompt_bryndin_precmd
-[[ $_prompt_bryndin_duration_text == '3s ' ]] || {
+[[ $_prompt_bryndin_duration_text == ' 3s' ]] || {
   print -u2 "FAIL: duration text: '$_prompt_bryndin_duration_text'"; exit 1
 }
 prompt_bryndin_precmd
 [[ -z $_prompt_bryndin_duration_text ]] || {
   print -u2 "FAIL: duration was not cleared"; exit 1
 }
+
+# RPROMPT segments are separated by exactly one space and do not leave a
+# trailing gap against the right edge.
+zstyle ':prezto:module:prompt:bryndin' history 'no'
+zstyle ':prezto:module:prompt:bryndin' jobs 'no'
+prompt_bryndin_setup
+SECONDS=200
+prompt_bryndin_preexec
+SECONDS=204
+_prompt_bryndin_last_status=0
+prompt_bryndin_precmd
+VIM=1
+local rprompt=$(print -P -- "$RPROMPT")
+rprompt=${rprompt//$'\e'\[[0-9;]#m/}
+[[ $rprompt == ' 4s V' ]] || {
+  print -u2 "FAIL: duration/VIM spacing: <$rprompt>"; exit 1
+}
+[[ $rprompt != *'  '* ]] || {
+  print -u2 "FAIL: double space in RPROMPT: <$rprompt>"; exit 1
+}
+[[ $rprompt != *' ' ]] || {
+  print -u2 "FAIL: trailing space in RPROMPT: <$rprompt>"; exit 1
+}
+unset VIM
 
 # All off.
 zstyle ':prezto:module:prompt:bryndin' jobs 'no'

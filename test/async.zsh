@@ -13,6 +13,7 @@ local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 function pmodload { : }
 function add-zsh-hook { : }
 function add-zle-hook-widget { : }
+function async_stop_worker { typeset -g ASYNC_TEST_STOPPED=$1 }
 
 # A fake zsh-async that records what the theme asks it to do.
 local helper_dir=$(mktemp -d /tmp/opencode/bryndin-async.XXXXXX)
@@ -66,6 +67,19 @@ prompt_bryndin_async_callback prompt_bryndin_async_git 0 'GITBLOCK'
   print -u2 "FAIL: callback did not rebuild the header"; exit 1
 }
 
+# A result for another directory must not overwrite the current block.
+_prompt_bryndin_git='CURRENT'
+_prompt_bryndin_async_pwd='/somewhere/else'
+prompt_bryndin_async_callback prompt_bryndin_async_git 0 'STALE'
+[[ $_prompt_bryndin_git == CURRENT ]] || {
+  print -u2 "FAIL: stale async result replaced the current block: $_prompt_bryndin_git"; exit 1
+}
+_prompt_bryndin_async_pwd=$PWD
+prompt_bryndin_async_callback prompt_bryndin_async_git 0 'FRESH'
+[[ $_prompt_bryndin_git == FRESH ]] || {
+  print -u2 "FAIL: current-directory result was rejected"; exit 1
+}
+
 # Same repository: keep the block so `cd src` does not flicker.
 if command -v git >/dev/null 2>&1; then
   local repo=$(mktemp -d /tmp/opencode/bryndin-async-repo.XXXXXX)
@@ -83,6 +97,26 @@ if command -v git >/dev/null 2>&1; then
   }
   [[ $_prompt_bryndin_git_root == "$root" ]] || {
     print -u2 "FAIL: repository root was not tracked"; exit 1
+  }
+
+  # A cd inside a known repository must not spawn git rev-parse in precmd.
+  local fakebin=$(mktemp -d /tmp/opencode/bryndin-fakegit.XXXXXX)
+  local git_log="$fakebin/called"
+  cat > "$fakebin/git" <<'GIT'
+#!/bin/sh
+echo called >> "$GIT_CALL_LOG"
+exit 1
+GIT
+  chmod +x "$fakebin/git"
+  local old_path=$PATH
+  export GIT_CALL_LOG="$git_log"
+  PATH="$fakebin:$PATH"
+  _prompt_bryndin_last_pwd="$repo/other"
+  COLUMNS=200
+  prompt_bryndin_precmd
+  PATH=$old_path
+  [[ ! -e $git_log ]] || {
+    print -u2 "FAIL: same-repository cd still spawned git rev-parse"; exit 1
   }
 
   # Leaving the repository: clear the block immediately.
@@ -112,6 +146,17 @@ local zero='%([BSUbfksu]|([FBK]|){*})'
 local width=${#${(S%%)_prompt_bryndin_header//$~zero/}}
 (( width <= 40 )) || {
   print -u2 "FAIL: async callback header overflows: $width > 40"; exit 1
+}
+
+# Worker failure: stop using async and clean up the dead zpty.
+ASYNC_TEST_STOPPED=''
+_prompt_bryndin_async=1
+prompt_bryndin_async_callback '[async]' 2 '' 0 'worker died' 0
+(( _prompt_bryndin_async == 0 )) || {
+  print -u2 "FAIL: async mode stayed enabled after a worker failure"; exit 1
+}
+[[ $ASYNC_TEST_STOPPED == prompt_bryndin ]] || {
+  print -u2 "FAIL: dead async worker was not stopped"; exit 1
 }
 
 print "PASS: async git status works"

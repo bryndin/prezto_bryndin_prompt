@@ -26,7 +26,7 @@ prompt_bryndin_precmd
 [[ $_prompt_bryndin_status_text == *'✘'* ]] || {
   print -u2 "FAIL: failed status not rendered"; exit 1
 }
-[[ $_prompt_bryndin_status_text != *'2 '* ]] || {
+[[ $_prompt_bryndin_status_text != *'2'* ]] || {
   print -u2 "FAIL: numeric code shown by default"; exit 1
 }
 
@@ -34,7 +34,7 @@ zstyle ':prezto:module:prompt' show-return-val 'yes'
 prompt_bryndin_setup
 _prompt_bryndin_last_status=2
 prompt_bryndin_precmd
-[[ $_prompt_bryndin_status_text == *'2 '* ]] || {
+[[ $_prompt_bryndin_status_text == *'2'* ]] || {
   print -u2 "FAIL: show-return-val ignored: $_prompt_bryndin_status_text"; exit 1
 }
 

@@ -26,7 +26,7 @@ local check() {
 }
 
 # No SSH variables: hidden by default.
-unset SSH_TTY SSH_CLIENT SSH_CONNECTION
+unset SSH_TTY SSH_CLIENT SSH_CONNECTION SUDO_USER
 source "$theme"
 check no "auto without ssh"
 
@@ -39,6 +39,13 @@ SSH_CONNECTION=''
 SSH_TTY=/dev/pts/0
 prompt_bryndin_setup
 check yes "SSH_TTY"
+
+# sudo -s: USER is still root, but SUDO_USER records the invoking account.
+unset SSH_TTY SSH_CLIENT SSH_CONNECTION
+SUDO_USER='someone-else'
+prompt_bryndin_setup
+check yes "SUDO_USER"
+unset SUDO_USER
 
 zstyle ':prezto:module:prompt:bryndin' host 'never'
 prompt_bryndin_setup

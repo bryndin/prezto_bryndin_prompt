@@ -49,4 +49,30 @@ prompt_bryndin_measure "$_prompt_bryndin_left_expanded" "$_prompt_bryndin_right_
   print -u2 "FAIL: margin not applied (filler=$_prompt_bryndin_filler_width)"; exit 1
 }
 
+# Literal prompt-escape lookalikes in dynamic text are visible characters, not
+# zero-width escapes.  %%f renders as "%f" (2 columns), and a literal
+# %{...%} pair is likewise text rather than a zero-width marker.
+COLUMNS=20
+_prompt_bryndin_conf[margin]='0'
+local measure_case
+for measure_case in '%%f:2' '%%B:2' '%%d:2' '%%F{red}:7' '%%{abc%%}:7' '100%%done:8'; do
+  local text=${measure_case%:*}
+  local expected=${measure_case##*:}
+  prompt_bryndin_measure "$text" ''
+  local got=$(( 20 - _prompt_bryndin_filler_width ))
+  (( got == expected )) || {
+    print -u2 "FAIL: width of <$text> is $got, expected $expected"; exit 1
+  }
+done
+
+# Real prompt escapes are still zero-width or expanded normally.
+prompt_bryndin_measure '%F{red}' ''
+(( _prompt_bryndin_filler_width == 20 )) || {
+  print -u2 "FAIL: colour escape was counted as visible (filler=$_prompt_bryndin_filler_width)"; exit 1
+}
+prompt_bryndin_measure '%{abc%}' ''
+(( _prompt_bryndin_filler_width == 20 )) || {
+  print -u2 "FAIL: %{...%} was counted as visible (filler=$_prompt_bryndin_filler_width)"; exit 1
+}
+
 print "PASS: display-column widths and clipping work"

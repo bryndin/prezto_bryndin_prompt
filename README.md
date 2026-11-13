@@ -24,7 +24,7 @@ Features
   vi overwrite mode and `$VIM` indicators
 * multi-byte (display-column) aware width calculation, so wide characters and
   CJK paths do not break the separator
-* 256-colour defaults with an automatic downgrade to 16 colours, plus
+* 256-colour defaults with an automatic downgrade to 16 or 8 colours, plus
   `NO_COLOR` / monochrome support
 * optional asynchronous git status collection
 * everything configurable through `zstyle` — no need to edit the theme file
@@ -86,7 +86,8 @@ zstyle ':prezto:module:prompt:bryndin' virtualenv-color   'yellow'
 zstyle ':prezto:module:prompt:bryndin' dir-color          '33'
 zstyle ':prezto:module:prompt:bryndin' git-color          'blue'
 zstyle ':prezto:module:prompt:bryndin' error-color        'red'
-# auto | 256 | 16 | none.  NO_COLOR also forces 'none'.
+# auto | 256 | 16 | none.  `auto' trusts COLORTERM=truecolor/24bit and
+# downgrades to 16 or 8 colours according to terminfo.  NO_COLOR forces 'none'.
 zstyle ':prezto:module:prompt:bryndin' colors             'auto'
 
 # Separator glyph and its colour (empty = same as `main-color`).
@@ -151,16 +152,26 @@ Notes
   synchronous collection.  When the directory changes, the previous git block
   is kept if the new directory is still inside the same repository and cleared
   otherwise; the new block appears when the worker returns.  Queued jobs are
-  flushed on each prompt so rapid directory changes do not build a backlog.
+  flushed on each prompt so rapid directory changes do not build a backlog,
+  results for a directory that is no longer current are ignored, and a `cd`
+  inside the known repository root does not spawn a synchronous `git
+  rev-parse`.
 * The header re-flows on terminal resize via a `TRAPWINCH` handler.  Any
   pre-existing resize trap is chained while the theme is active and restored
   when the theme is torn down.
 * `compressed-pwd` only controls the overflow fallback.  The normal header
   shows the full `%~` path and switches to the compressed form when it does not
   fit.
-* As with other Prezto themes, git ref names and virtualenv names are inserted
-  into a prompt string. Avoid literal `%` in ref names, or escape it in your
-  `git:info:*` formats.
+* Git ref names and virtualenv names are escaped as literal prompt text before
+  they reach the prompt.  A literal `%`, a quote, `$`, a backtick or a
+  backslash in a ref or environment name is displayed as typed; it is not
+  interpreted as a prompt escape or evaluated as shell code.
+* Boolean styles accept the same spellings as `zstyle -t` (`yes`/`true`/`on`/`1`
+  and `no`/`false`/`off`/`0`).  An explicit theme `show-return-code` setting
+  takes precedence over the framework-wide `show-return-val` style.
+* `colors auto` trusts `COLORTERM=truecolor`/`24bit` even when terminfo only
+  advertises eight colours, and downgrades bright (8-15) and grayscale colours
+  to the basic 0-7 palette when the terminal really has only eight.
 
 Tests
 -----
@@ -170,7 +181,7 @@ zsh test/all.zsh
 zsh -n prompt_bryndin_setup
 ```
 
-Each test file can also be run on its own (`zsh test/coalesce.zsh`, etc.). They
+Each test file can also be run on its own (`zsh test/git-safety.zsh`, etc.). They
 load the theme with the Prezto modules stubbed out, so no Prezto installation
 is required.
 
