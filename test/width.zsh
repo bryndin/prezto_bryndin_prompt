@@ -65,7 +65,33 @@ for measure_case in '%%f:2' '%%B:2' '%%d:2' '%%F{red}:7' '%%{abc%%}:7' '100%%don
   }
 done
 
-# Real prompt escapes are still zero-width or expanded normally.
+# strftime specifiers inside %D{...} must not be mistaken for prompt escapes.
+# %S, %s, %u, %U and %k are both valid strftime fields and prompt escapes.
+COLUMNS=20
+local fmt expected=''
+for fmt expected in \
+  '%D{%s}' 10 \
+  '%D{%H:%M:%S}' 8 \
+  '%D{%Y-%m-%d}' 10 \
+  '%D{%u}' 1 \
+  '%D{%U}' 2 \
+  '%D{%k}' 2; do
+  prompt_bryndin_measure "$fmt" ''
+  local got=$(( 20 - _prompt_bryndin_filler_width ))
+  (( got == expected )) || {
+    print -u2 "FAIL: width of <$fmt> is $got, expected $expected"; exit 1
+  }
+done
+prompt_bryndin_measure '%D{%B}' ''
+(( 20 - _prompt_bryndin_filler_width >= 3 )) || {
+  print -u2 "FAIL: %D{%B} was treated as a prompt escape"; exit 1
+}
+prompt_bryndin_measure '%D{%b}' ''
+(( 20 - _prompt_bryndin_filler_width >= 3 )) || {
+  print -u2 "FAIL: %D{%b} was treated as a prompt escape"; exit 1
+}
+
+# Real prompt formatting escapes are still zero-width.
 prompt_bryndin_measure '%F{red}' ''
 (( _prompt_bryndin_filler_width == 20 )) || {
   print -u2 "FAIL: colour escape was counted as visible (filler=$_prompt_bryndin_filler_width)"; exit 1

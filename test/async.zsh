@@ -227,4 +227,30 @@ prompt_bryndin_async_callback '[async]' 2 '' 0 'worker died' 0
   print -u2 "FAIL: dead async worker was not stopped"; exit 1
 }
 
+# Sync mode: a failing git-info must clear the block even if it leaves stale
+# values in git_info, or the previous repository's branch survives.
+function git-info {
+  git_info=(
+    bryndin-git-prefix 'PREFIX'
+    bryndin-git-suffix 'SUFFIX'
+    bryndin-branch 'stale-branch'
+  )
+  return 1
+}
+_prompt_bryndin_async=0
+_prompt_bryndin_git='STALE'
+COLUMNS=80
+prompt_bryndin_precmd
+[[ -z $_prompt_bryndin_git ]] || {
+  print -u2 "FAIL: failing git-info reused stale data: $_prompt_bryndin_git"; exit 1
+}
+
+# The same must hold when git-info is unavailable entirely.
+unfunction git-info
+_prompt_bryndin_git='STALE'
+prompt_bryndin_precmd
+[[ -z $_prompt_bryndin_git ]] || {
+  print -u2 "FAIL: missing git-info reused stale data: $_prompt_bryndin_git"; exit 1
+}
+
 print "PASS: async git status works"
