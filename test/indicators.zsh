@@ -53,7 +53,8 @@ _prompt_bryndin_last_status=0
 prompt_bryndin_precmd
 VIM=1
 local rprompt=$(print -P -- "$RPROMPT")
-rprompt=${rprompt//$'\e'\[[0-9;]#m/}
+rprompt=${rprompt//$'\e'(\[[0-9;?]#[a-zA-Z]|[()][0-9A-Za-z]|[=>78])/}
+rprompt=${rprompt//$'\017'/}
 [[ $rprompt == ' 4s V' ]] || {
   print -u2 "FAIL: duration/VIM spacing: <$rprompt>"; exit 1
 }

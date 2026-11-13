@@ -24,7 +24,8 @@ source "$theme"
   print -u2 "FAIL: default non-root prompt has no prompt character: $PROMPT"; exit 1
 }
 local rendered=$(print -P -- "$PROMPT")
-rendered=${rendered//$'\e'\[[0-9;]#m/}
+rendered=${rendered//$'\e'(\[[0-9;?]#[a-zA-Z]|[()][0-9A-Za-z]|[=>78])/}
+rendered=${rendered//$'\017'/}
 [[ $rendered == *'❯ ' ]] || {
   print -u2 "FAIL: typed text would sit against the prompt character"; exit 1
 }

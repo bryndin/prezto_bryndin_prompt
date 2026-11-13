@@ -453,11 +453,18 @@ function prompt_bryndin_visible_width {
   local text=$1
   local sentinel=$'\001bryndin\002'
   local literal_escape='%{*%}'
+  # Strip formatting escapes before prompt expansion: `%b' can expand through
+  # terminfo to a reset containing non-CSI sequences (the linux entry's sgr0
+  # includes SI), which would otherwise be counted as visible columns.
+  local prompt_escape='%([BSUbfksu]|([FBK]){*})'
   local csi=$'\e''\[[0-9;?]#[a-zA-Z]'
+  local noncsi=$'\e''([()][0-9A-Za-z]|[=>78])'
   text=${text//\%\%/$sentinel}
-  text=${text//$~literal_escape/}
+  text=${(S)text//$~literal_escape/}
+  text=${(S)text//$~prompt_escape/}
   text=${(S%%)text}
   text=${text//$~csi/}
+  text=${text//$~noncsi/}
   text=${text//$sentinel/\%}
   REPLY=${(m)#text}
 }
@@ -634,7 +641,10 @@ function prompt_bryndin_async_git {
   (( ${+functions[git-info]} )) || return 1
   git-info || return 1
   prompt_bryndin_git_reply
-  print -r -- "$REPLY"
+  # Include the directory the job ran in.  A job that was already running when
+  # the user changed directory can finish after precmd updated the global
+  # dispatch directory; the callback compares this tag with $PWD.
+  print -rn -- "$1"$'\001'"$REPLY"
 }
 
 function prompt_bryndin_async_callback {
@@ -652,11 +662,19 @@ function prompt_bryndin_async_callback {
   fi
 
   [[ $1 == prompt_bryndin_async_git ]] || return 0
-  # A result that was already in flight when the directory changed must not
-  # overwrite the new directory's block.  precmd usually flushes such jobs, but
-  # a ZLE widget can change directory and redraw before precmd runs.
-  [[ $_prompt_bryndin_async_pwd == $PWD ]] || return 0
-  local rendered=$3
+  local rendered=$3 job_pwd=''
+  if [[ $rendered == *$'\001'* ]]; then
+    job_pwd=${rendered%%$'\001'*}
+    rendered=${rendered#*$'\001'}
+    # Compare the directory the job actually ran in, not the directory of the
+    # most recent dispatch: an already-running job can finish after precmd
+    # has queued the next one.
+    [[ $job_pwd == $PWD ]] || return 0
+  else
+    # Compatibility with callbacks from an older worker that did not tag its
+    # output; this covers the usual flush-before-dispatch case.
+    [[ $_prompt_bryndin_async_pwd == $PWD ]] || return 0
+  fi
   [[ $rendered == $_prompt_bryndin_git ]] && return 0
   _prompt_bryndin_git=$rendered
   # A longer git block can make the header overflow; refit the directory
@@ -702,9 +720,11 @@ function prompt_bryndin_precmd {
     # same repository, so `cd src` does not blink the branch away.
     if [[ -z $_prompt_bryndin_last_pwd || $PWD != $_prompt_bryndin_last_pwd ]]; then
       local root=''
+      local root_dir=${_prompt_bryndin_git_root%/}
       # `cd src' inside a known repository does not need to spawn git at all.
+      # The `${root%/}/*` form also handles a repository at `/`.
       if [[ -n $_prompt_bryndin_git_root &&
-            $PWD == $_prompt_bryndin_git_root(|/*) ]]; then
+            ( $PWD == $_prompt_bryndin_git_root || $PWD == $root_dir/* ) ]]; then
         root=$_prompt_bryndin_git_root
       else
         (( ${+commands[git]} )) && \
@@ -725,6 +745,8 @@ function prompt_bryndin_precmd {
       _prompt_bryndin_async_pwd=$PWD
       if ! async_job prompt_bryndin prompt_bryndin_async_git "$PWD"; then
         _prompt_bryndin_async=0
+        (( ${+functions[async_stop_worker]} )) && \
+          async_stop_worker prompt_bryndin 2>/dev/null
       fi
     fi
   fi
@@ -826,6 +848,10 @@ function prompt_bryndin_preview {
   emulate -L zsh
   local +h PROMPT='' RPROMPT='' SPROMPT=''
   local -a prompt_opts
+  # Preview runs in a subshell and prints immediately; an async git worker
+  # would be killed with the subshell and the first prompt would have no git
+  # block.  Let setup use the synchronous path instead.
+  local _prompt_bryndin_preview=1
   print -n 'bryndin theme'
   (( $# > 0 )) && print -n " with parameters \`$*'"
   print ':'
@@ -836,7 +862,7 @@ function prompt_bryndin_preview {
   prompt_bryndin_precmd
   (( ${+functions[editor-info]} )) && editor-info 2>/dev/null
   [[ -o promptcr ]] && print -n $'\r'
-  print -P -- "${PS1}command arg1 arg2 ... argn"
+  print -rP -- "${PS1}command arg1 arg2 ... argn"
 }
 
 #
@@ -1068,7 +1094,8 @@ function prompt_bryndin_setup {
   # the parent's zstyle database at fork time, so the git-info formats must be
   # configured before this point or the worker renders an empty git block.
   _prompt_bryndin_async=0
-  if [[ $_prompt_bryndin_conf[async] == yes ]]; then
+  if [[ $_prompt_bryndin_conf[async] == yes &&
+        -z ${_prompt_bryndin_preview:-} ]]; then
     local dir async_file=''
     for dir in $fpath; do
       [[ -r $dir/async ]] && { async_file=$dir/async; break }

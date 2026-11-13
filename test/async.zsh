@@ -26,7 +26,11 @@ function async_start_worker {
 }
 function async_register_callback { typeset -g ASYNC_TEST_CALLBACK=$2 }
 function async_flush_jobs { typeset -g ASYNC_TEST_FLUSH=$1 }
-function async_job { typeset -g ASYNC_TEST_JOB=$2 }
+function async_job {
+  typeset -g ASYNC_TEST_JOB=$2
+  (( ${ASYNC_TEST_FAIL:-0} )) && return 1
+  return 0
+}
 function async { : }
 function zpty { return 0 }
 async "$@"
@@ -80,6 +84,37 @@ prompt_bryndin_async_callback prompt_bryndin_async_git 0 'FRESH'
   print -u2 "FAIL: current-directory result was rejected"; exit 1
 }
 
+# A job that was already running when the directory changed tags its own
+# directory in the output; a mismatched tag must be rejected even though the
+# global dispatch directory now matches $PWD.
+_prompt_bryndin_git='CURRENT'
+_prompt_bryndin_async_pwd=$PWD
+prompt_bryndin_async_callback prompt_bryndin_async_git 0 "/old/repoA"$'\001STALE'
+[[ $_prompt_bryndin_git == CURRENT ]] || {
+  print -u2 "FAIL: in-flight job from another directory was accepted: $_prompt_bryndin_git"; exit 1
+}
+prompt_bryndin_async_callback prompt_bryndin_async_git 0 "$PWD"$'\001FRESH-TAGGED'
+[[ $_prompt_bryndin_git == FRESH-TAGGED ]] || {
+  print -u2 "FAIL: correctly tagged job was rejected"; exit 1
+}
+
+# The worker itself must emit the directory tag and the rendered block.
+function git-info {
+  git_info=(
+    bryndin-git-prefix 'PREFIX'
+    bryndin-git-suffix 'SUFFIX'
+    bryndin-branch 'main'
+  )
+}
+local worker_output=$(prompt_bryndin_async_git "$PWD")
+unfunction git-info
+[[ $worker_output == "$PWD"$'\001'* ]] || {
+  print -u2 "FAIL: async worker did not tag its output: $worker_output"; exit 1
+}
+[[ $worker_output == *':%F{green}main%f'* ]] || {
+  print -u2 "FAIL: async worker did not render the git block: $worker_output"; exit 1
+}
+
 # Same repository: keep the block so `cd src` does not flicker.
 if command -v git >/dev/null 2>&1; then
   local repo=$(mktemp -d /tmp/opencode/bryndin-async-repo.XXXXXX)
@@ -119,6 +154,25 @@ GIT
     print -u2 "FAIL: same-repository cd still spawned git rev-parse"; exit 1
   }
 
+  # A repository at "/" must contain every absolute path, including the
+  # literal root itself.  The `(|/*)` form used to miss this case.
+  local saved_root=$_prompt_bryndin_git_root
+  local saved_last=$_prompt_bryndin_last_pwd
+  local saved_pwd=$PWD
+  cd /tmp
+  _prompt_bryndin_git_root='/'
+  _prompt_bryndin_last_pwd='/old'
+  rm -f "$git_log"
+  PATH="$fakebin:$PATH"
+  prompt_bryndin_precmd
+  PATH=$old_path
+  [[ ! -e $git_log ]] || {
+    print -u2 "FAIL: repository root / was not treated as containing /tmp"; exit 1
+  }
+  _prompt_bryndin_git_root=$saved_root
+  _prompt_bryndin_last_pwd=$saved_last
+  cd "$saved_pwd"
+
   # Leaving the repository: clear the block immediately.
   local nonrepo=$(mktemp -d /tmp/opencode/bryndin-async-nonrepo.XXXXXX)
   cd "$nonrepo"
@@ -146,6 +200,20 @@ local zero='%([BSUbfksu]|([FBK]|){*})'
 local width=${#${(S%%)_prompt_bryndin_header//$~zero/}}
 (( width <= 40 )) || {
   print -u2 "FAIL: async callback header overflows: $width > 40"; exit 1
+}
+
+# async_job failure: disable async and clean up the worker immediately.
+ASYNC_TEST_FAIL=1
+ASYNC_TEST_STOPPED=''
+_prompt_bryndin_async=1
+COLUMNS=80
+prompt_bryndin_precmd
+ASYNC_TEST_FAIL=0
+(( _prompt_bryndin_async == 0 )) || {
+  print -u2 "FAIL: async mode stayed enabled after async_job failed"; exit 1
+}
+[[ $ASYNC_TEST_STOPPED == prompt_bryndin ]] || {
+  print -u2 "FAIL: failed async worker was not stopped"; exit 1
 }
 
 # Worker failure: stop using async and clean up the dead zpty.
