@@ -26,14 +26,26 @@ source "$theme"
 local rendered=$(print -P -- "$PROMPT")
 rendered=${rendered//$'\e'(\[[0-9;?]#[a-zA-Z]|[()][0-9A-Za-z]|[=>78])/}
 rendered=${rendered//$'\017'/}
-[[ $rendered == *'❯ ' ]] || {
-  print -u2 "FAIL: typed text would sit against the prompt character"; exit 1
+[[ $rendered == *'❯' ]] || {
+  print -u2 "FAIL: default non-root prompt has no prompt character"; exit 1
+}
+[[ $rendered != *'❯ '* ]] || {
+  print -u2 "FAIL: default prompt has a space before typed text"; exit 1
 }
 
 zstyle ':prezto:module:prompt:bryndin' keymap-indicator 'yes'
 prompt_bryndin_setup
 [[ $PROMPT == *'${editor_info[keymap]}'* ]] || {
   print -u2 "FAIL: keymap-indicator=yes ignored: $PROMPT"; exit 1
+}
+rendered=$(print -P -- "$PROMPT")
+rendered=${rendered//$'\e'(\[[0-9;?]#[a-zA-Z]|[()][0-9A-Za-z]|[=>78])/}
+rendered=${rendered//$'\017'/}
+[[ $rendered == *'❯❯❯' ]] || {
+  print -u2 "FAIL: keymap indicator missing from rendered prompt"; exit 1
+}
+[[ $rendered != *'❯❯❯ '* ]] || {
+  print -u2 "FAIL: keymap prompt has a space before typed text"; exit 1
 }
 
 print "PASS: keymap indicator is opt-in and a prompt character remains"

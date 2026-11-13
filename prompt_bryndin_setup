@@ -1087,8 +1087,6 @@ function prompt_bryndin_setup {
     RPROMPT+='${VIM:+" %BV'"${reset_fg}"'%b"}'
   [[ $_prompt_bryndin_conf[overwrite] == yes ]] && \
     PROMPT+='${editor_info[overwrite]}'
-  # Keep the cursor one column away from the prompt character.
-  PROMPT+=' '
 
   # Optional async git status.  Start the worker last: zpty workers inherit
   # the parent's zstyle database at fork time, so the git-info formats must be
