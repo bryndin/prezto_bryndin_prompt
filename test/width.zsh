@@ -107,6 +107,16 @@ prompt_bryndin_visible_width $'\e(B'
   print -u2 "FAIL: non-CSI terminal reset counted as $REPLY columns"; exit 1
 }
 
+# Colon-separated SGR parameters (e.g. truecolor) are zero-width too.
+prompt_bryndin_visible_width $'\e[38:2:255:0:0m'
+(( REPLY == 0 )) || {
+  print -u2 "FAIL: colon-separated SGR counted as $REPLY columns"; exit 1
+}
+prompt_bryndin_visible_width $'\e[4:3m'
+(( REPLY == 0 )) || {
+  print -u2 "FAIL: colon-separated underline SGR counted as $REPLY columns"; exit 1
+}
+
 # `%b' can expand through terminfo to a reset containing a non-CSI sequence
 # (linux is one such entry).  Measurement must still report zero columns.
 local child=$(mktemp /tmp/opencode/bryndin-width.XXXXXX)

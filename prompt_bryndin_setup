@@ -457,7 +457,7 @@ function prompt_bryndin_visible_width {
   # control sequences it emits.  Do not pre-strip prompt formatting escapes:
   # `%S', `%s', `%b', `%B', `%u', `%U' and `%k' are also strftime specifiers
   # inside `%D{...}' and must survive until `%D' has expanded.
-  local csi=$'\e''\[[0-9;?]#[a-zA-Z]'
+  local csi=$'\e''\[[0-9;:?]#[a-zA-Z]'
   local noncsi=$'\e''([()][0-9A-Za-z]|[=>78])'
   local ctrl=$'[\001-\010\013-\037\177]'
   text=${text//\%\%/$sentinel}
@@ -738,6 +738,10 @@ function prompt_bryndin_precmd {
     fi
     if ! zpty -t prompt_bryndin &>/dev/null; then
       _prompt_bryndin_async=0
+      # Also unregister zsh-async's fd watcher/callback when the worker died
+      # between prompts.
+      (( ${+functions[async_stop_worker]} )) && \
+        async_stop_worker prompt_bryndin 2>/dev/null
     else
       # Drop queued jobs from previous directories so rapid cd commands do not
       # build a backlog of obsolete git queries.

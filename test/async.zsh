@@ -32,7 +32,10 @@ function async_job {
   return 0
 }
 function async { : }
-function zpty { return 0 }
+function zpty {
+  (( ${ASYNC_TEST_ZPTY_FAIL:-0} )) && return 1
+  return 0
+}
 async "$@"
 EOF
 fpath=( "$helper_dir" $fpath )
@@ -251,6 +254,22 @@ _prompt_bryndin_git='STALE'
 prompt_bryndin_precmd
 [[ -z $_prompt_bryndin_git ]] || {
   print -u2 "FAIL: missing git-info reused stale data: $_prompt_bryndin_git"; exit 1
+}
+
+# A worker that disappeared between prompts must be stopped, not just ignored:
+# async_stop_worker detaches zsh-async's fd watcher and callback.
+ASYNC_TEST_ZPTY_FAIL=1
+ASYNC_TEST_STOPPED=''
+_prompt_bryndin_async=1
+_prompt_bryndin_last_pwd=$PWD
+COLUMNS=80
+prompt_bryndin_precmd
+ASYNC_TEST_ZPTY_FAIL=0
+(( _prompt_bryndin_async == 0 )) || {
+  print -u2 "FAIL: async mode stayed enabled after the worker disappeared"; exit 1
+}
+[[ $ASYNC_TEST_STOPPED == prompt_bryndin ]] || {
+  print -u2 "FAIL: dead worker was not stopped before synchronous fallback"; exit 1
 }
 
 print "PASS: async git status works"
