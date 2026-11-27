@@ -7,6 +7,7 @@ emulate -LR zsh
 zmodload -i zsh/zutil
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
+unset NO_COLOR VIRTUAL_ENV CONDA_DEFAULT_ENV
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 function pmodload { : }
 function add-zsh-hook { : }
@@ -27,16 +28,13 @@ prompt_bryndin_measure "$_prompt_bryndin_left_expanded" "$_prompt_bryndin_right_
   print -u2 "FAIL: wide chars not counted in display columns (filler=$_prompt_bryndin_filler_width)"; exit 1
 }
 
-local clipped=$(prompt_bryndin_clip 'abcdefghij' 5)
+prompt_bryndin_clip_reply 'abcdefghij' 5
+local clipped=$REPLY
 (( ${(m)#clipped} == 5 )) || {
   print -u2 "FAIL: clip produced $clipped (width ${(m)#clipped})"; exit 1
 }
 [[ $clipped == *'…'* ]] || {
   print -u2 "FAIL: clipped text has no ellipsis"; exit 1
-}
-prompt_bryndin_clip_reply 'abcdefghij' 5
-[[ $REPLY == "$clipped" ]] || {
-  print -u2 "FAIL: clip reply differs: $REPLY != $clipped"; exit 1
 }
 
 # Optional right margin.

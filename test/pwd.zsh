@@ -7,6 +7,7 @@ emulate -LR zsh
 zmodload -i zsh/zutil
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
+unset NO_COLOR VIRTUAL_ENV CONDA_DEFAULT_ENV
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 function pmodload { : }
 function add-zsh-hook { : }
@@ -19,39 +20,32 @@ fpath=( "$helper_dir" $fpath )
 
 source "$theme"
 
-[[ $(prompt_bryndin_prepare_full_pwd) == *'%~'* ]] || {
-  print -u2 "FAIL: full PWD does not use %~"; exit 1
-}
 prompt_bryndin_full_pwd_reply
 [[ $REPLY == *'%~'* ]] || {
-  print -u2 "FAIL: REPLY did not receive %~: $REPLY"; exit 1
-}
-[[ $(prompt_bryndin_prepare_full_pwd) == "$REPLY" ]] || {
-  print -u2 "FAIL: print and REPLY forms disagree: $(prompt_bryndin_prepare_full_pwd) != $REPLY"; exit 1
+  print -u2 "FAIL: full PWD did not use %~: $REPLY"; exit 1
 }
 
 # default style delegates to prompt-pwd
-[[ $(prompt_bryndin_pwd_text) == 'FROM-PROMPT-PWD' ]] || {
-  print -u2 "FAIL: prompt-pwd helper was not used: $(prompt_bryndin_pwd_text)"; exit 1
-}
 prompt_bryndin_pwd_text_reply
-[[ $REPLY == "$(prompt_bryndin_pwd_text)" ]] || {
-  print -u2 "FAIL: pwd reply differs: $REPLY != $(prompt_bryndin_pwd_text)"; exit 1
+[[ $REPLY == 'FROM-PROMPT-PWD' ]] || {
+  print -u2 "FAIL: prompt-pwd helper was not used: $REPLY"; exit 1
 }
 prompt_bryndin_compressed_pwd_reply
-[[ $REPLY == "$(prompt_bryndin_prepare_compressed_pwd)" ]] || {
-  print -u2 "FAIL: compressed reply differs: $REPLY != $(prompt_bryndin_prepare_compressed_pwd)"; exit 1
+[[ $REPLY == 'FROM-PROMPT-PWD' || $REPLY == *'FROM-PROMPT-PWD'* ]] || {
+  print -u2 "FAIL: compressed reply did not delegate to prompt-pwd: $REPLY"; exit 1
 }
 
 _prompt_bryndin_conf[compressed-pwd]='tilde'
 local expected=${PWD/#$HOME/\~}
-[[ $(prompt_bryndin_pwd_text) == "$expected" ]] || {
-  print -u2 "FAIL: tilde style: $(prompt_bryndin_pwd_text) != $expected"; exit 1
+prompt_bryndin_pwd_text_reply
+[[ $REPLY == "$expected" ]] || {
+  print -u2 "FAIL: tilde style: $REPLY != $expected"; exit 1
 }
 
 _prompt_bryndin_conf[compressed-pwd]='full'
-[[ $(prompt_bryndin_pwd_text) == "$PWD" ]] || {
-  print -u2 "FAIL: full style: $(prompt_bryndin_pwd_text) != $PWD"; exit 1
+prompt_bryndin_pwd_text_reply
+[[ $REPLY == "$PWD" ]] || {
+  print -u2 "FAIL: full style: $REPLY != $PWD"; exit 1
 }
 
 # A wide header keeps the full %~ path; the style is the overflow fallback.
@@ -85,16 +79,19 @@ local old_home=$HOME
 HOME="$base/alex"
 _prompt_bryndin_conf[compressed-pwd]='tilde'
 cd "$base/alexander" || exit 1
-[[ $(prompt_bryndin_pwd_text 0) == "$base/alexander" ]] || {
-  print -u2 "FAIL: sibling path was treated as HOME: $(prompt_bryndin_pwd_text 0)"; exit 1
+prompt_bryndin_pwd_text_reply 0
+[[ $REPLY == "$base/alexander" ]] || {
+  print -u2 "FAIL: sibling path was treated as HOME: $REPLY"; exit 1
 }
 cd "$HOME" || exit 1
-[[ $(prompt_bryndin_pwd_text 0) == '~' ]] || {
-  print -u2 "FAIL: exact HOME did not render as ~: $(prompt_bryndin_pwd_text 0)"; exit 1
+prompt_bryndin_pwd_text_reply 0
+[[ $REPLY == '~' ]] || {
+  print -u2 "FAIL: exact HOME did not render as ~: $REPLY"; exit 1
 }
 cd "$HOME/sub" || exit 1
-[[ $(prompt_bryndin_pwd_text 0) == '~/sub' ]] || {
-  print -u2 "FAIL: HOME child did not render as ~/sub: $(prompt_bryndin_pwd_text 0)"; exit 1
+prompt_bryndin_pwd_text_reply 0
+[[ $REPLY == '~/sub' ]] || {
+  print -u2 "FAIL: HOME child did not render as ~/sub: $REPLY"; exit 1
 }
 HOME=$old_home
 

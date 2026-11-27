@@ -8,8 +8,8 @@ zmodload -i zsh/zutil
 zmodload -i zsh/terminfo
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
-# Keep the caller's virtualenv out of the header.
-unset VIRTUAL_ENV CONDA_DEFAULT_ENV
+# Keep the caller's virtualenv and colour overrides out of the header.
+unset VIRTUAL_ENV CONDA_DEFAULT_ENV COLORTERM NO_COLOR
 
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 function pmodload { : }
@@ -36,21 +36,26 @@ prompt_bryndin_precmd
 [[ $SPROMPT != *'%F{'* ]] || {
   print -u2 "FAIL: SPROMPT still contains %F escapes"; exit 1
 }
-local keymap
+local keymap git_renamed git_unmerged
 zstyle -s ':prezto:module:editor:info:keymap:primary' format keymap
 [[ $keymap != *'%F{'* ]] || {
   print -u2 "FAIL: editor keymap still contains %F escapes: $keymap"; exit 1
 }
+zstyle -s ':prezto:module:git:info:renamed' format git_renamed
+zstyle -s ':prezto:module:git:info:unmerged' format git_unmerged
+[[ $git_renamed != *'%F{'* && $git_unmerged != *'%F{'* ]] || {
+  print -u2 "FAIL: git formats still contain %F escapes in monochrome mode"; exit 1
+}
 
 # Literal escaped percent pairs must survive monochrome stripping: a directory
 # named "%F{red}" is text, not a colour escape.
-local stripped=$(prompt_bryndin_strip_colors 'x%%F{red}y')
-[[ $stripped == 'x%%F{red}y' ]] || {
-  print -u2 "FAIL: monochrome strip corrupted a literal escape: $stripped"; exit 1
+prompt_bryndin_strip_colors_reply 'x%%F{red}y'
+[[ $REPLY == 'x%%F{red}y' ]] || {
+  print -u2 "FAIL: monochrome strip corrupted a literal escape: $REPLY"; exit 1
 }
-stripped=$(prompt_bryndin_strip_colors 'x%F{red}y')
-[[ $stripped == 'xy' ]] || {
-  print -u2 "FAIL: monochrome strip left a real colour escape: $stripped"; exit 1
+prompt_bryndin_strip_colors_reply 'x%F{red}y'
+[[ $REPLY == 'xy' ]] || {
+  print -u2 "FAIL: monochrome strip left a real colour escape: $REPLY"; exit 1
 }
 
 local saved_left=$_prompt_bryndin_left_expanded
@@ -86,7 +91,8 @@ function add-zle-hook-widget { : }
 source "$theme"
 print -r -- "time=\$_prompt_bryndin_fg[time-color]"
 for spec in 1 4 15 16 21 231 232 244 255 256; do
-  print -r -- "\$spec=\$(prompt_bryndin_color_escape \$spec)"
+  prompt_bryndin_color_escape_reply \$spec
+  print -r -- "\$spec=\$REPLY"
 done
 EOF
 local downgraded=$(zsh "$child")
@@ -119,10 +125,12 @@ function add-zle-hook-widget { : }
 source "$theme"
 print -r -- "ncolors=\${terminfo[colors]:-0}"
 for spec in 8 9 15 16 232 244 27; do
-  print -r -- "\$spec=\$(prompt_bryndin_color_escape \$spec)"
+  prompt_bryndin_color_escape_reply \$spec
+  print -r -- "\$spec=\$REPLY"
 done
 COLORTERM=truecolor
-print -r -- "truecolor=\$(prompt_bryndin_color_escape 27)"
+prompt_bryndin_color_escape_reply 27
+print -r -- "truecolor=\$REPLY"
 EOF
 local out8=$(zsh "$child8")
 if [[ $out8 == *'ncolors=8'* ]]; then

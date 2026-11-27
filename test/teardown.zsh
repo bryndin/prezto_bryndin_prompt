@@ -30,4 +30,21 @@ zstyle -t ':prezto:module:prompt' managed && {
   print -u2 "FAIL: managed zstyle not removed"; exit 1
 }
 
+# Pre-existing `:prezto:module:prompt managed` value must be restored on teardown,
+# even when setup is called more than once before teardown.
+zstyle ':prezto:module:prompt' managed 'custom-prev'
+prompt_bryndin_setup
+prompt_bryndin_setup
+local during_managed=''
+zstyle -s ':prezto:module:prompt' managed during_managed
+[[ $during_managed == 'yes' ]] || {
+  print -u2 "FAIL: setup did not set managed=yes: $during_managed"; exit 1
+}
+prompt_bryndin_teardown
+local restored_managed=''
+zstyle -s ':prezto:module:prompt' managed restored_managed
+[[ $restored_managed == 'custom-prev' ]] || {
+  print -u2 "FAIL: teardown did not restore prior managed value: '$restored_managed'"; exit 1
+}
+
 print "PASS: preview/teardown hooks work"

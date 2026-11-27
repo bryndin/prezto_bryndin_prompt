@@ -21,12 +21,12 @@ prompt_newline=$'\n%{\r%}'
 local child=$(mktemp /tmp/opencode/bryndin-hygiene.XXXXXX)
 local out option
 
-for option in NO_UNSET KSH_ARRAYS; do
+for option in NO_UNSET KSH_ARRAYS WARN_CREATE_GLOBAL; do
   cat > "$child" <<EOF
 emulate -LR zsh
 zmodload -i zsh/zutil
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE $option
-unset VIRTUAL_ENV CONDA_DEFAULT_ENV
+unset VIRTUAL_ENV CONDA_DEFAULT_ENV NO_COLOR
 function pmodload { : }
 function add-zsh-hook { : }
 function add-zle-hook-widget { : }
@@ -36,13 +36,16 @@ zstyle ':prezto:module:prompt:bryndin' async 'no'
 source "$theme"
 COLUMNS=80
 prompt_bryndin_precmd
+prompt_bryndin_teardown
+prompt_bryndin_setup
+prompt_bryndin_precmd
 print OK
 EOF
   out=$(zsh "$child" 2>&1)
   [[ $out == *OK* ]] || {
     print -u2 "FAIL: precmd failed with $option: $out"; exit 1
   }
-  [[ $out != *'parameter not set'* && $out != *'bad output format'* ]] || {
+  [[ $out != *'parameter not set'* && $out != *'bad output format'* && $out != *'created globally'* ]] || {
     print -u2 "FAIL: $option leaked into the theme: $out"; exit 1
   }
 done

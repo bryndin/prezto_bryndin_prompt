@@ -43,8 +43,11 @@ function git-info {
   done
 }
 
-# Pretend another theme left its keymap format in place.
+# Pretend another theme left its keymap and git formats in place, plus hooks.
 zstyle ':prezto:module:editor:info:keymap:primary' format 'OLD-THEME'
+zstyle ':prezto:module:git:info:branch' format 'OLD-BRANCH'
+local saved_prompt=$PROMPT
+local -a saved_precmd=($precmd_functions)
 
 # Minimal promptinit stand-in.  The built-in preview helper calls setup, then
 # precmd, then prints the prompt; it does not call editor-info itself.
@@ -59,6 +62,17 @@ function prompt_preview_theme {
 
 COLUMNS=120
 local output=$(prompt_bryndin_preview 2>&1)
+
+# Preview runs in a subshell and must leave caller zstyles, PROMPT, and hooks intact.
+local after_km after_br
+zstyle -s ':prezto:module:editor:info:keymap:primary' format after_km
+zstyle -s ':prezto:module:git:info:branch' format after_br
+[[ $after_km == 'OLD-THEME' && $after_br == 'OLD-BRANCH' ]] || {
+  print -u2 "FAIL: preview mutated caller zstyles: km='$after_km' br='$after_br'"; exit 1
+}
+[[ $PROMPT == "$saved_prompt" && "${precmd_functions[*]}" == "${saved_precmd[*]}" ]] || {
+  print -u2 "FAIL: preview mutated caller PROMPT or precmd_functions"; exit 1
+}
 
 [[ $output == *'bryndin theme'* ]] || {
   print -u2 "FAIL: preview did not identify the theme: $output"; exit 1

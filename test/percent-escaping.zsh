@@ -7,6 +7,7 @@ emulate -LR zsh
 zmodload -i zsh/zutil
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
+unset NO_COLOR VIRTUAL_ENV CONDA_DEFAULT_ENV
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 
 function pmodload { : }
@@ -18,7 +19,8 @@ local testdir=$(mktemp -d /tmp/opencode/bryndin-pct.XXXXXX)
 mkdir -p "$testdir/100%done"
 cd -q "$testdir/100%done"
 
-local compressed=$(prompt_bryndin_prepare_compressed_pwd)
+prompt_bryndin_compressed_pwd_reply
+local compressed=$REPLY
 
 [[ $compressed == *'%%'* ]] || {
   print -u2 "FAIL: compressed PWD is not escaped: $compressed"; exit 1

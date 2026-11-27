@@ -13,15 +13,16 @@ Features
 
 * full terminal width top line to visually separate different runs
 * current time (format configurable)
-* current user, highlighted in red for root
-* host, shown only on remote machines (SSH, `su`/`sudo`)
+* current user, highlighted in red for root (`always`, `auto` or `never`)
+* host, shown only on remote machines (SSH, `su`/`sudo`) by default
 * active Python virtualenv / Conda environment
-* git info (branch, position or commit, action and status counters)
-* current directory, with `~` abbreviation and automatic shortening when the
-  header would not fit
-* directories without write permission highlighted in red
-* last command exit status, background jobs, history number, command duration,
-  vi overwrite mode and `$VIM` indicators
+* git info (branch, position or commit, action and status indicators) with
+  `GIT_OPTIONAL_LOCKS=0` so status checks never lock `.git/index`
+* current directory, with `~` abbreviation, smart narrow-terminal degradation
+  (drops low-priority blocks before crushing the directory path), and red
+  highlighting when not writable
+* last command exit status, background jobs, history number, human-readable
+  command duration (`$EPOCHREALTIME`), vi overwrite mode and `$VIM` indicators
 * multi-byte (display-column) aware width calculation, so wide characters and
   CJK paths do not break the separator
 * 256-colour defaults with an automatic downgrade to 16 or 8 colours, plus
@@ -58,14 +59,15 @@ Installation
    The theme sets `zstyle ':prezto:module:prompt' managed 'yes'` itself, which
    is required for the `editor` module to populate `editor_info`.
 
-4. Start a new shell. `prompt -p bryndin` previews the theme.
+4. Start a new shell. `prompt -p bryndin` previews the theme in an isolated
+   subshell without modifying your active prompt settings.
 
 Requirements
 ------------
 
 * zsh 5.3 or newer
-* Prezto modules: `git`, `helper`, `editor`, `prompt` (`python` is recommended
-  for virtualenv detection but is optional)
+* Prezto modules: `git`, `helper`, `editor`, `prompt` (`python` is optional;
+  virtualenv and Conda environments are read directly from the environment)
 * a UTF-8 locale and a terminal that understands box-drawing characters
 * a 256-colour terminal for the default palette (falls back automatically)
 
@@ -98,42 +100,53 @@ zstyle ':prezto:module:prompt:bryndin' separator-color    ''
 zstyle ':prezto:module:prompt:bryndin' blocks \
   'time' 'host' 'virtualenv' 'git'
 
+# Order in which left-hand blocks are dropped when the terminal is too narrow.
+zstyle ':prezto:module:prompt:bryndin' drop-order \
+  'time' 'host' 'virtualenv' 'git'
+
 # Time: any zsh prompt date/time escape.
 zstyle ':prezto:module:prompt:bryndin' time-format        '%T'
 
-# auto | always | never.  SSH_TTY / SSH_CLIENT / SSH_CONNECTION and
-# su/sudo are detected in 'auto' mode.
+# Username visibility: always | auto | never.
+# `auto' shows the username only for root or remote/switched sessions (hiding
+# the entire `host` block on ordinary local shells).
+zstyle ':prezto:module:prompt:bryndin' user               'always'
+
+# Hostname visibility: auto | always | never.  SSH_TTY / SSH_CLIENT /
+# SSH_CONNECTION and su/sudo are detected in `auto' mode.
 zstyle ':prezto:module:prompt:bryndin' host               'auto'
 
 # Compression fallback used only when the full %~ path does not fit:
 # prompt-pwd | full | tilde.  'prompt-pwd' honours the framework-wide
 # ':prezto:module:prompt' pwd-length style (short | long | full).
-# `pwd' remains a deprecated alias for `compressed-pwd'.
-zstyle ':prezto:module:prompt:bryndin' compressed-pwd   'prompt-pwd'
+# `pwd' remains a compatibility alias for `compressed-pwd'.
+zstyle ':prezto:module:prompt:bryndin' compressed-pwd     'prompt-pwd'
 
-# Clip any single block to N display columns (0 disables clipping).
-zstyle ':prezto:module:prompt:bryndin' max-block-width     '0'
+# Clip individual block payloads (pwd, git ref, virtualenv, user@host, time)
+# to N display columns (0 disables clipping).
+zstyle ':prezto:module:prompt:bryndin' max-block-width    '0'
 
 # Leave N columns free at the right edge.  Useful on terminals that wrap
 # immediately when the last column is filled; modern emulators use 0.
-zstyle ':prezto:module:prompt:bryndin' margin              '0'
+zstyle ':prezto:module:prompt:bryndin' margin             '0'
 
 # Second-line indicators (yes/no).
-zstyle ':prezto:module:prompt:bryndin' exit-status         'yes'
-zstyle ':prezto:module:prompt:bryndin' jobs                'yes'
-zstyle ':prezto:module:prompt:bryndin' history             'no'
-zstyle ':prezto:module:prompt:bryndin' duration            'no'
-zstyle ':prezto:module:prompt:bryndin' vim                 'yes'
-zstyle ':prezto:module:prompt:bryndin' overwrite           'yes'
-# ZLE keymap indicator (❯❯❯ / ❮❮❮) before the input line.  A basic ❯ is
+zstyle ':prezto:module:prompt:bryndin' exit-status        'yes'
+zstyle ':prezto:module:prompt:bryndin' jobs               'yes'
+zstyle ':prezto:module:prompt:bryndin' history            'no'
+zstyle ':prezto:module:prompt:bryndin' duration           'no'
+zstyle ':prezto:module:prompt:bryndin' duration-min       '2'
+zstyle ':prezto:module:prompt:bryndin' vim                'yes'
+zstyle ':prezto:module:prompt:bryndin' overwrite          'yes'
+# ZLE keymap indicator (❯❯❯ / ❮❮❮) before the input line.  A basic `❯ ` is
 # shown when this is off.
-zstyle ':prezto:module:prompt:bryndin' keymap-indicator    'no'
+zstyle ':prezto:module:prompt:bryndin' keymap-indicator   'no'
 
-# Collapse to a single line (drop the separator header).
-zstyle ':prezto:module:prompt:bryndin' single-line         'no'
+# Collapse to a single line (drop the separator header and skip header/git work).
+zstyle ':prezto:module:prompt:bryndin' single-line        'no'
 
 # Collect git status in a background worker (requires Prezto's async helper).
-zstyle ':prezto:module:prompt:bryndin' async               'no'
+zstyle ':prezto:module:prompt:bryndin' async              'no'
 ```
 
 Framework-wide styles that are honoured:
@@ -147,31 +160,31 @@ zstyle ':prezto:module:prompt' managed          'yes'   # set by the theme
 Notes
 -----
 
-* Git status is collected synchronously by default. Enable `async` for large
-  repositories; if the async helper is unavailable the theme falls back to
-  synchronous collection.  When the directory changes, the previous git block
-  is kept if the new directory is still inside the same repository and cleared
-  otherwise; the new block appears when the worker returns.  Queued jobs are
-  flushed on each prompt so rapid directory changes do not build a backlog,
-  results for a directory that is no longer current are ignored, and a `cd`
-  inside the known repository root does not spawn a synchronous `git
-  rev-parse`.
-* The header re-flows on terminal resize via a `TRAPWINCH` handler.  Any
-  pre-existing resize trap is chained while the theme is active and restored
-  when the theme is torn down.
-* `compressed-pwd` only controls the overflow fallback.  The normal header
-  shows the full `%~` path and switches to the compressed form when it does not
-  fit.
+* Git status is collected synchronously by default (skipped automatically when
+  `git` is omitted from `blocks` or `single-line` is enabled). Enable `async`
+  for large repositories; if the async helper is unavailable the theme falls
+  back to synchronous collection. Both paths set `GIT_OPTIONAL_LOCKS=0` so
+  background checks never contend on `.git/index.lock`. When changing
+  directories inside the same repository worktree (excluding `.git/` and nested
+  submodules/repositories), the previous git block is kept without spawning a
+  synchronous `git rev-parse`.
+* On narrow terminals, the header first switches from `%~` to `compressed-pwd`,
+  clips `compressed-pwd` down to a readable 15-column floor, drops lower-priority
+  blocks according to `drop-order` (`time`, `host`, `virtualenv`, `git`), and
+  expands the directory back into any freed columns before clipping below 15
+  columns as a last resort.
+* Command duration uses `$EPOCHREALTIME` (`zsh/datetime`), ignores commands
+  shorter than `duration-min` seconds (default `2`), and formats durations as
+  `5s`, `2m 14s`, or `1h 3m`.
+* The header re-flows on terminal resize via `TRAPWINCH`. Any pre-existing
+  resize trap is chained while the theme is active and restored on teardown.
 * Git ref names and virtualenv names are escaped as literal prompt text before
-  they reach the prompt.  A literal `%`, a quote, `$`, a backtick or a
-  backslash in a ref or environment name is displayed as typed; it is not
-  interpreted as a prompt escape or evaluated as shell code.
-* Boolean styles accept the same spellings as `zstyle -t` (`yes`/`true`/`on`/`1`
-  and `no`/`false`/`off`/`0`).  An explicit theme `show-return-code` setting
-  takes precedence over the framework-wide `show-return-val` style.
-* `colors auto` trusts `COLORTERM=truecolor`/`24bit` even when terminfo only
-  advertises eight colours, and downgrades bright (8-15) and grayscale colours
-  to the basic 0-7 palette when the terminal really has only eight.
+  they reach the prompt. A literal `%`, quote, `$`, backtick or backslash in a
+  ref or environment name is displayed as typed; it is not interpreted as a
+  prompt escape or evaluated as shell code.
+* Boolean styles accept `yes`/`true`/`on`/`1` and `no`/`false`/`off`/`0`. An
+  explicit theme `show-return-code` setting takes precedence over the
+  framework-wide `show-return-val` style.
 
 Tests
 -----

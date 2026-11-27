@@ -1,66 +1,60 @@
-# My custom 2-line prompt
-#
-# Features:
-#   - Full terminal width top line to visually separate different runs
-#   - Current time
-#   - Current user
-#   - Host (only shown on remote machines)
-#   - Active Python virtualenv
-#   - Git info
-#   - Current directory (shortened if too long)
+# Custom two-line Prezto prompt
 #
 # Authors:
 #   Dmitry Bryndin <bryndin@gmail.com>
-#
-# Screenshots:
-#   http://i.imgur.com/b2M5eOw.png?1
-#
 
-# All internal state is namespaced so switching themes cannot leak globals.
-typeset -gA _prompt_bryndin_conf
-typeset -gA _prompt_bryndin_fg
-typeset -gA _prompt_bryndin_block_text
-typeset -gA _prompt_bryndin_block_expanded
-typeset -ga _prompt_bryndin_blocks
-typeset -g  _prompt_bryndin_monochrome=0
-typeset -g  _prompt_bryndin_cmd_start=0
-typeset -g  _prompt_bryndin_duration_text=''
-typeset -g  _prompt_bryndin_last_status=0
-typeset -g  _prompt_bryndin_status_text=''
-typeset -g  _prompt_bryndin_git=''
-typeset -g  _prompt_bryndin_venv=''
-typeset -g  _prompt_bryndin_async=0
-typeset -g  _prompt_bryndin_async_pwd=''
-typeset -g  _prompt_bryndin_left=''
-typeset -g  _prompt_bryndin_right=''
-typeset -g  _prompt_bryndin_left_expanded=''
-typeset -g  _prompt_bryndin_right_expanded=''
-typeset -g  _prompt_bryndin_header=''
-typeset -g  _prompt_bryndin_cur_dir=''
-typeset -g  _prompt_bryndin_filler_width=0
-typeset -g  _prompt_bryndin_overflow=0
-typeset -g  _prompt_bryndin_last_pwd=''
-typeset -g  _prompt_bryndin_git_root=''
-typeset -g  _prompt_bryndin_trapwinch_installed=0
-typeset -g  _prompt_bryndin_had_trapwinch=0
-typeset -g  _prompt_bryndin_saved_trapwinch=''
+# Declare all theme-owned globals in one place so re-entering setup after
+# teardown works cleanly even under `setopt WARN_CREATE_GLOBAL`.
+function prompt_bryndin_init_state {
+  typeset -gA _prompt_bryndin_conf _prompt_bryndin_fg
+  typeset -gA _prompt_bryndin_block_text _prompt_bryndin_block_expanded
+  typeset -ga _prompt_bryndin_blocks _prompt_bryndin_drop_order
+  typeset -g  _prompt_bryndin_monochrome=0
+  typeset -g  _prompt_bryndin_cmd_start=''
+  typeset -g  _prompt_bryndin_duration_text=''
+  typeset -g  _prompt_bryndin_last_status=0
+  typeset -g  _prompt_bryndin_status_text=''
+  typeset -g  _prompt_bryndin_status_dismissed=0
+  typeset -g  _prompt_bryndin_git=''
+  typeset -g  _prompt_bryndin_venv=''
+  typeset -g  _prompt_bryndin_time=''
+  typeset -g  _prompt_bryndin_async=0
+  typeset -g  _prompt_bryndin_has_git_block=0
+  typeset -g  _prompt_bryndin_has_venv_block=0
+  typeset -g  _prompt_bryndin_has_time_block=0
+  typeset -g  _prompt_bryndin_left=''
+  typeset -g  _prompt_bryndin_right=''
+  typeset -g  _prompt_bryndin_left_expanded=''
+  typeset -g  _prompt_bryndin_right_expanded=''
+  typeset -g  _prompt_bryndin_header=''
+  typeset -g  _prompt_bryndin_cur_dir=''
+  typeset -g  _prompt_bryndin_cached_prompt_pwd=''
+  typeset -g  _prompt_bryndin_has_cached_pwd=0
+  typeset -g  _prompt_bryndin_filler_width=0
+  typeset -g  _prompt_bryndin_overflow=0
+  typeset -g  _prompt_bryndin_last_pwd=''
+  typeset -g  _prompt_bryndin_git_root=''
+  typeset -g  _prompt_bryndin_installed=${_prompt_bryndin_installed:-0}
+  typeset -g  _prompt_bryndin_trapwinch_installed=${_prompt_bryndin_trapwinch_installed:-0}
+  typeset -g  _prompt_bryndin_had_trapwinch=${_prompt_bryndin_had_trapwinch:-0}
+  typeset -g  _prompt_bryndin_saved_trapwinch=${_prompt_bryndin_saved_trapwinch:-}
+  typeset -g  _prompt_bryndin_had_managed=${_prompt_bryndin_had_managed:-0}
+  typeset -g  _prompt_bryndin_saved_managed=${_prompt_bryndin_saved_managed:-}
+}
 
-#
-# Every option is a zstyle under ':prezto:module:prompt:bryndin'.  Defaults are
-# declared here and overridden from .zpreztorc, so users never need to edit the
-# theme file.  See README.md for the full list.
-#
+prompt_bryndin_init_state
+
+# Populated by git-info, python-info and editor-info when loaded.
+typeset -gA git_info python_info editor_info
+
+(( ${+functions[pmodload]} )) && pmodload 'helper'
+
+# Load zstyles under ':prezto:module:prompt:bryndin'.
+# Uses `main-color` rather than `color` so ':prezto:*:* color' cannot collide.
 function prompt_bryndin_load_config {
   emulate -L zsh
-  # Prezto calls prompt_<theme>_setup directly when the user switches back to
-  # a theme, without re-sourcing this file.  Teardown unsets the state, so
-  # every initialising function must re-declare the types it relies on.
-  typeset -gA _prompt_bryndin_conf
-  typeset -ga _prompt_bryndin_blocks
-  # NOTE: Prezto reserves the style name `color' for its global
-  # `zstyle ":prezto:*:*" color "yes"' setting, and zstyle patterns match
-  # across colons.  Never name a theme option `color' (or `case-sensitive'):
-  # it would inherit the framework value.  Hence `main-color'.
+  prompt_bryndin_init_state
+
   _prompt_bryndin_conf=(
     main-color        'cyan'
     time-color        '27'
@@ -72,9 +66,9 @@ function prompt_bryndin_load_config {
     separator         '─'
     separator-color   ''
     time-format       '%T'
+    user              'always'
     host              'auto'
-    pwd               'prompt-pwd'
-    compressed-pwd    ''
+    compressed-pwd    'prompt-pwd'
     colors            'auto'
     max-block-width   '0'
     margin            '0'
@@ -83,6 +77,7 @@ function prompt_bryndin_load_config {
     jobs              'yes'
     history           'no'
     duration          'no'
+    duration-min      '2'
     vim               'yes'
     overwrite         'yes'
     keymap-indicator  'no'
@@ -90,41 +85,44 @@ function prompt_bryndin_load_config {
     show-return-code  'no'
   )
 
-  local key value
-  local have_show_return=0
+  local key value have_show_return=0 have_compressed_pwd=0
   for key in ${(k)_prompt_bryndin_conf}; do
     value=''
-    if zstyle -s ":prezto:module:prompt:bryndin" "$key" value; then
-      _prompt_bryndin_conf[$key]="$value"
+    if zstyle -s ':prezto:module:prompt:bryndin' "$key" value; then
+      _prompt_bryndin_conf[$key]=$value
       [[ $key == show-return-code ]] && have_show_return=1
+      [[ $key == compressed-pwd ]] && have_compressed_pwd=1
     fi
   done
 
-  # Boolean styles accept the same spellings as `zstyle -t' (yes/true/on/1),
-  # not just the literal `yes' this theme compares against later.
+  # Support historical `pwd` alias when `compressed-pwd` is not explicitly set.
+  if (( ! have_compressed_pwd )) && zstyle -s ':prezto:module:prompt:bryndin' pwd value; then
+    _prompt_bryndin_conf[compressed-pwd]=$value
+  fi
+
   local -a bool_keys=(
     async exit-status jobs history duration vim overwrite
     keymap-indicator single-line show-return-code
   )
   for key in $bool_keys; do
     case ${_prompt_bryndin_conf[$key]} in
-      (true|on|1)    _prompt_bryndin_conf[$key]='yes' ;;
-      (false|off|0)  _prompt_bryndin_conf[$key]='no' ;;
+      true|on|1)   _prompt_bryndin_conf[$key]='yes' ;;
+      false|off|0) _prompt_bryndin_conf[$key]='no' ;;
     esac
   done
-
-  # `pwd' is the historical name for the compressed fallback; keep it as an
-  # alias while `compressed-pwd' provides the explicit name.
-  [[ -n $_prompt_bryndin_conf[compressed-pwd] ]] || \
-    _prompt_bryndin_conf[compressed-pwd]=$_prompt_bryndin_conf[pwd]
 
   _prompt_bryndin_blocks=()
   zstyle -a ':prezto:module:prompt:bryndin' blocks _prompt_bryndin_blocks \
     || _prompt_bryndin_blocks=(time host virtualenv git)
 
-  # Honour the framework-wide style for printing the numeric exit code, but
-  # only when the theme-specific setting is absent: an explicit
-  # `show-return-code no' must win over `show-return-val yes'.
+  _prompt_bryndin_drop_order=()
+  zstyle -a ':prezto:module:prompt:bryndin' drop-order _prompt_bryndin_drop_order \
+    || _prompt_bryndin_drop_order=(time host virtualenv git)
+
+  _prompt_bryndin_has_git_block=$(( ${_prompt_bryndin_blocks[(I)git]} > 0 ))
+  _prompt_bryndin_has_venv_block=$(( ${_prompt_bryndin_blocks[(I)virtualenv]} > 0 ))
+  _prompt_bryndin_has_time_block=$(( ${_prompt_bryndin_blocks[(I)time]} > 0 ))
+
   if (( ! have_show_return )); then
     if zstyle -t ':prezto:module:prompt' show-return-val; then
       _prompt_bryndin_conf[show-return-code]='yes'
@@ -132,92 +130,69 @@ function prompt_bryndin_load_config {
       _prompt_bryndin_conf[show-return-code]='no'
     fi
   fi
-
 }
 
-#
-# Remove colour escapes from a prompt string so monochrome mode also covers
-# text supplied by framework zstyles rather than built by this theme.
-#
-function prompt_bryndin_strip_colors {
+# Strip %f/%k/%F{...}/%K{...} in-process while preserving literal `%%`.
+function prompt_bryndin_strip_colors_reply {
   emulate -L zsh
   setopt EXTENDED_GLOB
-  local s=$1
-  local color_pat='%([fk]|([FK]){*})'
-  # Protect escaped percent pairs: `%%F{red}' is literal text typed by the
-  # user, not a colour escape, and must survive monochrome stripping.
-  local sentinel=$'\001bryndin\002'
+  local s=$1 sentinel=$'\001bryndin\002' color_pat='%([fk]|([FK]){*})'
   s=${s//\%\%/$sentinel}
   s=${(S)s//$~color_pat/}
-  s=${s//$sentinel/%%}
-  print -rn -- "$s"
+  REPLY=${s//$sentinel/%%}
 }
 
-#
-# Resolve one configured colour spec into a %F{...} prompt escape, or into an
-# empty string when colours are disabled.  Numeric 256-colour indices are
-# downgraded to the nearest basic colour on terminals that cannot display them.
-#
-function prompt_bryndin_color_escape {
+# Resolve a colour spec into a %F{...} escape, downgrading 256-colour indices
+# on 16/8-colour terminals when `colors` is `auto` or `16`.
+function prompt_bryndin_color_escape_reply {
   emulate -L zsh
   local spec=$1
-  (( _prompt_bryndin_monochrome )) && return 0
+  if (( _prompt_bryndin_monochrome )); then
+    REPLY=''
+    return 0
+  fi
 
   local mode=$_prompt_bryndin_conf[colors]
   local ncolors=${terminfo[colors]:-0}
   local downgrade=0
   if [[ $mode == 16 ]]; then
     downgrade=1
-  elif [[ $mode == auto ]]; then
-    # Some terminals advertise only eight colours in terminfo while
-    # COLORTERM says they understand 24-bit escapes; trust the latter.
-    if [[ $COLORTERM == (truecolor|24bit) ]]; then
-      downgrade=0
-    elif (( ncolors < 256 )); then
-      downgrade=1
-    fi
+  elif [[ $mode == auto && $COLORTERM != (truecolor|24bit) ]] && (( ncolors < 256 )); then
+    downgrade=1
   fi
 
   if [[ $spec == <-> ]] && (( downgrade )); then
     if (( spec >= 8 && spec < 16 && ncolors > 0 && ncolors <= 8 )); then
-      # 8-15 are bright variants; an 8-colour terminal only has 0-7.
       spec=$(( spec - 8 ))
     elif (( spec >= 16 && spec < 232 )); then
       local idx=$(( spec - 16 ))
       local r=$(( idx / 36 )) g=$(( (idx / 6) % 6 )) b=$(( idx % 6 ))
       spec=$(( (r >= 2) + 2 * (g >= 2) + 4 * (b >= 2) ))
     elif (( spec >= 232 && spec < 256 )); then
-      # Grayscale ramp: dark shades become black, light ones white.  Bright
-      # black is only available when the terminal has 16 colours.
-      if (( spec < 244 )); then
-        spec=$(( ncolors > 0 && ncolors <= 8 ? 0 : 8 ))
-      else
-        spec=7
-      fi
+      spec=$(( spec < 244 ? (ncolors > 0 && ncolors <= 8 ? 0 : 8) : 7 ))
     elif (( spec >= 256 )); then
       spec='default'
     fi
   fi
-  print -rn -- "%F{$spec}"
+  REPLY="%F{$spec}"
 }
 
 function prompt_bryndin_build_colors {
   emulate -L zsh
-  # Own the style reload here so the colour layer is self-contained and does
-  # not depend on who called setup.
   prompt_bryndin_load_config
   local mode=$_prompt_bryndin_conf[colors]
   _prompt_bryndin_monochrome=0
   [[ $mode == none || -n $NO_COLOR || $TERM == dumb ]] && _prompt_bryndin_monochrome=1
 
-  typeset -gA _prompt_bryndin_fg
   _prompt_bryndin_fg=()
   local key
   for key in main-color time-color host-color virtualenv-color dir-color git-color error-color; do
-    _prompt_bryndin_fg[$key]=$(prompt_bryndin_color_escape "$_prompt_bryndin_conf[$key]")
+    prompt_bryndin_color_escape_reply "$_prompt_bryndin_conf[$key]"
+    _prompt_bryndin_fg[$key]=$REPLY
   done
-  _prompt_bryndin_fg[separator-color]=$(prompt_bryndin_color_escape \
-    "${_prompt_bryndin_conf[separator-color]:-$_prompt_bryndin_conf[main-color]}")
+  prompt_bryndin_color_escape_reply \
+    "${_prompt_bryndin_conf[separator-color]:-$_prompt_bryndin_conf[main-color]}"
+  _prompt_bryndin_fg[separator-color]=$REPLY
   if (( _prompt_bryndin_monochrome )); then
     _prompt_bryndin_fg[reset]=''
   else
@@ -225,60 +200,13 @@ function prompt_bryndin_build_colors {
   fi
 }
 
-# These associative arrays are populated by git-info, python-info and
-# editor-info.  Declare them so the theme still renders cleanly when one of
-# those modules is unavailable (an unset scalar with a [subscript] is parsed as
-# arithmetic and throws "bad math expression").
-typeset -gA git_info python_info editor_info
-
-# Load dependencies.  Do not force modules the user may have excluded: git-info
-# and python-info are optional below, and python environments are read from
-# the environment itself.  The guard also keeps the file loadable outside a
-# Prezto session (for tests, for example).
-(( ${+functions[pmodload]} )) && pmodload 'helper'
-
-#
-# Escape plain text for safe embedding in a prompt string.  Only `%' needs
-# escaping: the value is inserted as the result of a parameter expansion, so
-# `$', backslashes and backticks are not re-parsed by prompt_subst.  Escaping
-# them would make them visible (and inflate the measured width).
-#
+# Escape literal `%` for safe insertion via parameter expansion in PROMPT.
 function prompt_bryndin_escape_reply {
   emulate -L zsh
   REPLY=${1//\%/\%\%}
 }
 
-function prompt_bryndin_escape {
-  prompt_bryndin_escape_reply "$1"
-  print -rn -- "$REPLY"
-}
-
-#
-# Build the virtualenv block from the environment variables directly, so the
-# name can be escaped.  (python-info's %v format inserts it verbatim.)
-#
-function prompt_bryndin_virtualenv_reply {
-  emulate -L zsh
-  local name=${VIRTUAL_ENV:t}
-  [[ -z $name ]] && name=$CONDA_DEFAULT_ENV
-  if [[ -z $name ]]; then
-    REPLY=''
-    return 0
-  fi
-  prompt_bryndin_escape_reply "$name"
-  REPLY="${_prompt_bryndin_fg[main-color]}─<${_prompt_bryndin_fg[virtualenv-color]}${REPLY}${_prompt_bryndin_fg[main-color]}>${_prompt_bryndin_fg[reset]}"
-}
-
-function prompt_bryndin_prepare_virtualenv {
-  prompt_bryndin_virtualenv_reply
-  print -rn -- "$REPLY"
-}
-
-#
-# Clip plain text to N display columns, appending an ellipsis.  ${#...} counts
-# characters, not terminal columns, so wide (e.g. CJK) glyphs are measured
-# with ${(m)#...} instead.
-#
+# Clip plain text to `max` display columns, appending `…`.
 function prompt_bryndin_clip_reply {
   emulate -L zsh
   local text=$1 max=$2
@@ -298,52 +226,42 @@ function prompt_bryndin_clip_reply {
   REPLY="${out}…"
 }
 
-function prompt_bryndin_clip {
-  prompt_bryndin_clip_reply "$@"
-  print -rn -- "$REPLY"
-}
-
-#
-# Decide whether to show the hostname.  `auto' detects SSH (via any of the
-# variables different sshd versions set) and su/sudo to another account.
-#
-function prompt_bryndin_is_remote {
+function prompt_bryndin_clip_max_reply {
   emulate -L zsh
-  case $_prompt_bryndin_conf[host] in
-    yes|always) return 0 ;;
-    no|never)   return 1 ;;
-  esac
-  [[ -n $SSH_TTY || -n $SSH_CLIENT || -n $SSH_CONNECTION ]] && return 0
-  # sudo -s keeps USER as root but records the invoking account here; this is
-  # cheaper and more reliable than forking logname (which fails in tmux and
-  # several GUI terminal setups).
-  [[ -n $SUDO_USER && $SUDO_USER != $USER ]] && return 0
-  local login=${$(command logname 2>/dev/null):-$USER}
-  [[ -n $login && $login != $USER ]] && return 0
-  return 1
-}
-
-function prompt_bryndin_full_pwd_reply {
-  # Set REPLY instead of printing so precmd can avoid a command substitution.
-  if [[ -w $PWD ]]; then
-    REPLY='%~'
+  local max=${_prompt_bryndin_conf[max-block-width]:-0}
+  if [[ $max == <-> ]] && (( max > 0 )); then
+    prompt_bryndin_clip_reply "$1" "$max"
   else
-    REPLY="${_prompt_bryndin_fg[error-color]}%~${_prompt_bryndin_fg[reset]}"
+    REPLY=$1
   fi
 }
 
-function prompt_bryndin_prepare_full_pwd {
-  # %~ abbreviates $HOME, matching the compressed representation.  It is a
-  # prompt escape, so zsh resolves it at draw time and prompt_bryndin_measure
-  # expands it when computing the width.
-  prompt_bryndin_full_pwd_reply
-  print -n -- "$REPLY"
+function prompt_bryndin_virtualenv_reply {
+  emulate -L zsh
+  local name=${VIRTUAL_ENV:t}
+  [[ -z $name ]] && name=$CONDA_DEFAULT_ENV
+  if [[ -z $name ]]; then
+    REPLY=''
+    return 0
+  fi
+  prompt_bryndin_clip_max_reply "$name"
+  prompt_bryndin_escape_reply "$REPLY"
+  REPLY="${_prompt_bryndin_fg[main-color]}─<${_prompt_bryndin_fg[virtualenv-color]}${REPLY}${_prompt_bryndin_fg[main-color]}>${_prompt_bryndin_fg[reset]}"
 }
 
-#
-# Is Prezto's prompt-pwd helper actually available?  autoload marks a function
-# as defined even when its file is missing, so check fpath explicitly.
-#
+# Detect remote sessions or account switches without forking external binaries.
+function prompt_bryndin_is_remote {
+  emulate -L zsh
+  case $_prompt_bryndin_conf[host] in
+    yes|always|true|on|1) return 0 ;;
+    no|never|false|off|0) return 1 ;;
+  esac
+  [[ -n $SSH_TTY || -n $SSH_CLIENT || -n $SSH_CONNECTION ]] && return 0
+  [[ -n $SUDO_USER && $SUDO_USER != $USER ]] && return 0
+  [[ -n $LOGNAME && $LOGNAME != $USER ]] && return 0
+  return 1
+}
+
 function prompt_bryndin_has_prompt_pwd {
   emulate -L zsh
   local dir
@@ -367,63 +285,18 @@ function prompt_bryndin_tilde_pwd_reply {
   fi
 }
 
-#
-# Produce the (%-escaped, clipped) directory text used when the full path does
-# not fit.  `compressed-pwd' selects the strategy; the default delegates to
-# Prezto's prompt-pwd, which honours the framework-wide
-# ':prezto:module:prompt' pwd-length style.  `pwd' remains a compatibility
-# alias for `compressed-pwd'.
-#
-function prompt_bryndin_pwd_text_reply {
+function prompt_bryndin_full_pwd_reply {
   emulate -L zsh
-  setopt EXTENDED_GLOB
-  local style=$_prompt_bryndin_conf[compressed-pwd]
-  local max=${1:-$_prompt_bryndin_conf[max-block-width]}
-  local text
-
-  case $style in
-    full)
-      text=$PWD
-      ;;
-    tilde)
-      prompt_bryndin_tilde_pwd_reply
-      text=$REPLY
-      ;;
-    *)
-      if prompt_bryndin_has_prompt_pwd; then
-        text=$(prompt-pwd)
-        text=${text//\%\%/\%}   # prompt-pwd escapes '%' for prompt strings
-      else
-        prompt_bryndin_tilde_pwd_reply
-        local pwd=$REPLY
-        if [[ "$pwd" == (#m)[/~] ]]; then
-          text="$MATCH"
-          unset MATCH
-        else
-          text="${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
-        fi
-      fi
-      ;;
-  esac
-
+  local max=${_prompt_bryndin_conf[max-block-width]:-0}
+  [[ $max == <-> ]] || max=0
+  local text='%~'
   if (( max > 0 )); then
-    prompt_bryndin_clip_reply "$text" "$max"
-    text=$REPLY
+    local expanded=${(%):-%~}
+    if (( ${(m)#expanded} > max )); then
+      prompt_bryndin_clip_reply "$expanded" "$max"
+      text=${REPLY//\%/%%}
+    fi
   fi
-  REPLY="${text//\%/%%}"
-}
-
-function prompt_bryndin_pwd_text {
-  prompt_bryndin_pwd_text_reply "$@"
-  print -rn -- "$REPLY"
-}
-
-function prompt_bryndin_compressed_pwd_reply {
-  prompt_bryndin_pwd_text_reply "$1"
-  local text=$REPLY
-
-  # Keep the "no write permission" highlight in the compressed representation
-  # too; otherwise the feature silently disappears on long paths.
   if [[ -w $PWD ]]; then
     REPLY=$text
   else
@@ -431,63 +304,96 @@ function prompt_bryndin_compressed_pwd_reply {
   fi
 }
 
-function prompt_bryndin_prepare_compressed_pwd {
-  prompt_bryndin_compressed_pwd_reply "$@"
-  print -rn -- "$REPLY"
-}
-
-#
-# Compute the visible display width of an expanded prompt string.  Literal
-# percent signs are protected before prompt expansion so a directory or ref
-# called `%f' is measured as two columns instead of being mistaken for a
-# zero-width colour escape.  Colour escapes expand to SGR sequences, which are
-# stripped afterwards.
-#
-function prompt_bryndin_visible_width {
+# Compute the unclipped plain-text compressed path, caching `prompt-pwd` across
+# a single layout pass so resize/overflow never forks `prompt-pwd` repeatedly.
+function prompt_bryndin_pwd_raw_reply {
   emulate -L zsh
   setopt EXTENDED_GLOB
-  # Measurement must never execute command substitutions copied from a
-  # directory, ref or virtualenv name.  Prompt-percent expansion is still
-  # applied, but PROMPT_SUBST's `$' handling is not.
+  case $_prompt_bryndin_conf[compressed-pwd] in
+    full)
+      REPLY=$PWD
+      ;;
+    tilde)
+      prompt_bryndin_tilde_pwd_reply
+      ;;
+    *)
+      if (( _prompt_bryndin_has_cached_pwd )); then
+        REPLY=$_prompt_bryndin_cached_prompt_pwd
+      elif prompt_bryndin_has_prompt_pwd; then
+        local raw=$(prompt-pwd)
+        REPLY=${raw//\%\%/\%}
+        _prompt_bryndin_cached_prompt_pwd=$REPLY
+        _prompt_bryndin_has_cached_pwd=1
+      else
+        prompt_bryndin_tilde_pwd_reply
+        local pwd=$REPLY
+        if [[ $pwd == (#m)[/~] ]]; then
+          REPLY=$MATCH
+        else
+          REPLY="${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}/${pwd:t}"
+        fi
+        _prompt_bryndin_cached_prompt_pwd=$REPLY
+        _prompt_bryndin_has_cached_pwd=1
+      fi
+      ;;
+  esac
+}
+
+function prompt_bryndin_pwd_text_reply {
+  emulate -L zsh
+  local max=${1:-$_prompt_bryndin_conf[max-block-width]}
+  [[ $max == <-> ]] || max=0
+  prompt_bryndin_pwd_raw_reply
+  if (( max > 0 )); then
+    prompt_bryndin_clip_reply "$REPLY" "$max"
+  fi
+  REPLY=${REPLY//\%/%%}
+}
+
+function prompt_bryndin_compressed_pwd_reply {
+  emulate -L zsh
+  prompt_bryndin_pwd_text_reply "$1"
+  if [[ ! -w $PWD ]]; then
+    REPLY="${_prompt_bryndin_fg[error-color]}${REPLY}${_prompt_bryndin_fg[reset]}"
+  fi
+}
+
+# Expand a prompt fragment without PROMPT_SUBST and strip zero-width escapes
+# (%{...%}, CSI, non-CSI resets, control chars) to get its plain text.
+function prompt_bryndin_expand_plain_reply {
+  emulate -L zsh
+  setopt EXTENDED_GLOB
   unsetopt PROMPT_SUBST
   local text=$1
   local sentinel=$'\001bryndin\002'
   local literal_escape='%{*%}'
-  # Let prompt expansion process the whole string, then strip the terminal
-  # control sequences it emits.  Do not pre-strip prompt formatting escapes:
-  # `%S', `%s', `%b', `%B', `%u', `%U' and `%k' are also strftime specifiers
-  # inside `%D{...}' and must survive until `%D' has expanded.
   local csi=$'\e''\[[0-9;:?]#[a-zA-Z]'
   local noncsi=$'\e''([()][0-9A-Za-z]|[=>78])'
   local ctrl=$'[\001-\010\013-\037\177]'
   text=${text//\%\%/$sentinel}
   text=${(S)text//$~literal_escape/}
-  text=${(S%%)text}
+  text=${(%%)text}
   text=${text//$~csi/}
   text=${text//$~noncsi/}
   text=${text//$sentinel/\%}
-  text=${text//$~ctrl/}
-  REPLY=${(m)#text}
+  REPLY=${text//$~ctrl/}
 }
 
-#
-# Compute the visible width of two already-expanded prompt strings and derive
-# the filler width.  Zero-width prompt escapes are stripped first.
-#
+# Measure visible display columns of a prompt fragment safely.
+function prompt_bryndin_visible_width {
+  emulate -L zsh
+  prompt_bryndin_expand_plain_reply "$1"
+  REPLY=${(m)#REPLY}
+}
+
 function prompt_bryndin_measure {
   emulate -L zsh
-  local left=$1 right=$2
-  local left_width right_width
+  local left=$1 right=$2 left_width right_width
   prompt_bryndin_visible_width "$left"
   left_width=$REPLY
   prompt_bryndin_visible_width "$right"
   right_width=$REPLY
 
-  # Never produce a negative filler (which would make the padding expression
-  # fail and leave the header wider than the terminal).  Track the overflow
-  # separately: it drives the compressed-PWD fallback and block clipping.
-  # `margin' is an opt-in safety gap for terminals that wrap immediately when
-  # the last column is filled.
   local margin=${_prompt_bryndin_conf[margin]:-0}
   [[ $margin == <-> ]] || margin=0
   local columns=${COLUMNS:-80}
@@ -498,10 +404,16 @@ function prompt_bryndin_measure {
 }
 
 function prompt_bryndin_prepare_header {
-  # Expand the deferred ${...} blocks exactly once and cache the result.  The
-  # per-block copies let reflow drop whole blocks without cutting through a
-  # prompt escape sequence.
-  typeset -gA _prompt_bryndin_block_expanded
+  emulate -L zsh
+  if (( _prompt_bryndin_has_time_block )); then
+    local max=${_prompt_bryndin_conf[max-block-width]:-0}
+    if [[ $max == <-> ]] && (( max > 0 )); then
+      prompt_bryndin_expand_plain_reply "$_prompt_bryndin_conf[time-format]"
+      prompt_bryndin_clip_reply "$REPLY" "$max"
+      _prompt_bryndin_time=${REPLY//\%/%%}
+    fi
+  fi
+
   local block expanded left=''
   _prompt_bryndin_block_expanded=()
   for block in $_prompt_bryndin_blocks; do
@@ -516,70 +428,113 @@ function prompt_bryndin_prepare_header {
   prompt_bryndin_measure "$left" "$right"
 }
 
-#
-# Format the directory and fit the header to the current terminal width.
-# Called from precmd and from the resize trap: starting from the full %~ path
-# each time lets narrowing compress it and widening restore it.
-#
+# Drop active non-empty left blocks in `_prompt_bryndin_drop_order` until
+# `right` ($1) fits or no non-empty blocks remain.  Sets `REPLY` to the new
+# expanded left string.
+function prompt_bryndin_drop_blocks_reply {
+  emulate -L zsh
+  local right=$1
+  local -a active=($_prompt_bryndin_blocks)
+  local left='' block drop idx
+  for block in $active; do left+=$_prompt_bryndin_block_expanded[$block]; done
+  prompt_bryndin_measure "$left" "$right"
+
+  while (( _prompt_bryndin_overflow > 0 && $#active > 0 )); do
+    idx=0
+    for drop in $_prompt_bryndin_drop_order; do
+      idx=${active[(I)$drop]}
+      (( idx > 0 )) && [[ -n ${_prompt_bryndin_block_expanded[$drop]} ]] && break
+      idx=0
+    done
+    if (( idx == 0 )); then
+      for (( idx = $#active; idx >= 1; idx-- )); do
+        [[ -n ${_prompt_bryndin_block_expanded[${active[$idx]}]} ]] && break
+      done
+    fi
+    (( idx == 0 )) && break
+    active[$idx]=()
+    left=''
+    for block in $active; do left+=$_prompt_bryndin_block_expanded[$block]; done
+    prompt_bryndin_measure "$left" "$right"
+  done
+  REPLY=$left
+}
+
+# Fit the directory and left-hand blocks to `$COLUMNS`:
+#   1. Full `%~` path (with `max-block-width` if set)
+#   2. `compressed-pwd`
+#   3. Clip `compressed-pwd` down to a readable 15-column floor
+#   4. Drop lowest-priority blocks (`drop-order`: time, host, virtualenv, git)
+#   5. Re-fit `compressed-pwd` into the space left alongside remaining blocks
 function prompt_bryndin_prepare_pwd {
   emulate -L zsh
   setopt EXTENDED_GLOB
+  _prompt_bryndin_has_cached_pwd=0
+  _prompt_bryndin_cached_prompt_pwd=''
+  {
+    prompt_bryndin_full_pwd_reply
+    _prompt_bryndin_cur_dir=$REPLY
+    prompt_bryndin_prepare_header
+    (( _prompt_bryndin_overflow == 0 )) && return 0
 
-  prompt_bryndin_full_pwd_reply
-  _prompt_bryndin_cur_dir=$REPLY
-  prompt_bryndin_prepare_header
-
-  # Fall back to the compressed directory if the blocks are not fitting.
-  if (( _prompt_bryndin_overflow > 0 )); then
     prompt_bryndin_compressed_pwd_reply
     _prompt_bryndin_cur_dir=$REPLY
     prompt_bryndin_prepare_header
-  fi
+    (( _prompt_bryndin_overflow == 0 )) && return 0
 
-  # If it still does not fit, clip the directory by the remaining deficit so
-  # the line never wraps.  The width to start from is the directory text as it
-  # is currently displayed (already clipped to max-block-width), not the full
-  # path: using the full path here would ignore max-block-width and leave the
-  # header wider than the terminal.
-  if (( _prompt_bryndin_overflow > 0 )); then
     prompt_bryndin_pwd_text_reply
-    local plain=$REPLY
-    local keep=$(( ${(m)#${plain//\%\%/\%}} - _prompt_bryndin_overflow ))
-    (( keep < 1 )) && keep=1
-    prompt_bryndin_compressed_pwd_reply $keep
+    local plain=${REPLY//\%\%/\%}
+    local plain_width=${(m)#plain}
+    local floor=$(( plain_width < 15 ? plain_width : 15 ))
+    local keep=$(( plain_width - _prompt_bryndin_overflow ))
+    if (( keep >= floor && keep >= 1 )); then
+      prompt_bryndin_compressed_pwd_reply $keep
+      _prompt_bryndin_cur_dir=$REPLY
+      prompt_bryndin_prepare_header
+      return 0
+    fi
+
+    if (( floor < plain_width && floor >= 1 )); then
+      prompt_bryndin_compressed_pwd_reply $floor
+      _prompt_bryndin_cur_dir=$REPLY
+    fi
+    local right=${(e)_prompt_bryndin_right}
+    prompt_bryndin_drop_blocks_reply "$right"
+    local left=$REPLY
+
+    # Expand `compressed-pwd` back into any space freed by dropped blocks, or
+    # clip below the floor when no droppable blocks remain.
+    prompt_bryndin_compressed_pwd_reply
     _prompt_bryndin_cur_dir=$REPLY
-    prompt_bryndin_prepare_header
-  fi
+    right=${(e)_prompt_bryndin_right}
+    prompt_bryndin_measure "$left" "$right"
+    if (( _prompt_bryndin_overflow > 0 )); then
+      keep=$(( plain_width - _prompt_bryndin_overflow ))
+      (( keep < 1 )) && keep=1
+      prompt_bryndin_compressed_pwd_reply $keep
+      _prompt_bryndin_cur_dir=$REPLY
+      right=${(e)_prompt_bryndin_right}
+      prompt_bryndin_measure "$left" "$right"
+    fi
+    _prompt_bryndin_left_expanded=$left
+    _prompt_bryndin_right_expanded=$right
+  } always {
+    _prompt_bryndin_has_cached_pwd=0
+    _prompt_bryndin_cached_prompt_pwd=''
+  }
 }
 
-#
-# Build the header string from the cached blocks.  This is cheap and can be
-# called again on a redraw (e.g. after a terminal resize) without re-running
-# git-info or re-evaluating the block templates.
-#
 function prompt_bryndin_reflow {
   emulate -L zsh
   local left=$_prompt_bryndin_left_expanded
   local right=$_prompt_bryndin_right_expanded
   prompt_bryndin_measure "$left" "$right"
 
-  # If the blocks still do not fit (very narrow terminal), drop whole blocks
-  # from the right of the configured order.  Clipping the string itself would
-  # risk cutting through a prompt escape sequence.
   if (( _prompt_bryndin_overflow > 0 )); then
-    local -a active=($_prompt_bryndin_blocks)
-    local block
-    while (( _prompt_bryndin_overflow > 0 && $#active > 0 )); do
-      active[-1]=()
-      left=''
-      for block in $active; do left+=$_prompt_bryndin_block_expanded[$block]; done
-      prompt_bryndin_measure "$left" "$right"
-    done
+    prompt_bryndin_drop_blocks_reply "$right"
+    left=$REPLY
   fi
 
-  # Repeat the separator to fill the available display columns.  A plain loop
-  # (rather than ${(l:...:)}) keeps the separator configurable and lets us
-  # account for double-width glyphs.
   local sep=${_prompt_bryndin_conf[separator]}
   local sep_escaped=${sep//\%/%%}
   local sep_width=${(m)#sep}
@@ -588,308 +543,253 @@ function prompt_bryndin_reflow {
   local filler='' i
   for (( i = 0; i < count; i++ )); do filler+=$sep_escaped; done
   _prompt_bryndin_header="${left}${_prompt_bryndin_fg[separator-color]}${filler}${_prompt_bryndin_fg[reset]}${right}"
-  (( _prompt_bryndin_monochrome )) && \
-    _prompt_bryndin_header=$(prompt_bryndin_strip_colors "$_prompt_bryndin_header")
+  if (( _prompt_bryndin_monochrome )); then
+    prompt_bryndin_strip_colors_reply "$_prompt_bryndin_header"
+    _prompt_bryndin_header=$REPLY
+  fi
   return 0
 }
 
-#
-# Build the git block from the raw keys requested in setup.  git-info escapes
-# `$', backticks and backslashes for consumers that eval its output; undo that
-# protection here.  The result is then escaped as literal prompt text, so a
-# ref name cannot inject prompt escapes or break out of a quoted expression.
-#
 function prompt_bryndin_git_reply {
   emulate -L zsh
+  setopt EXTENDED_GLOB
   local branch=${git_info[bryndin-branch]}
   local position=${git_info[bryndin-position]}
   local commit=${git_info[bryndin-commit]}
   local target='' color=''
   if [[ -n $branch ]]; then
     target=$branch
-    color='%F{green}'
+    (( ! _prompt_bryndin_monochrome )) && color='%F{green}'
   elif [[ -n $position ]]; then
     target=$position
-    color='%F{red}'
+    (( ! _prompt_bryndin_monochrome )) && color='%F{red}'
   elif [[ -n $commit ]]; then
     target=$commit
-    color='%F{green}'
+    (( ! _prompt_bryndin_monochrome )) && color='%F{green}'
   fi
 
   if [[ -n $target ]]; then
-    # Undo git-info's escape-eval protection.  (Q) also strips literal
-    # quotes, which are legal in ref names, so protect those first.
-    local quote='"' apostrophe="'"
-    local dq_sentinel=$'\001d\002' sq_sentinel=$'\001s\002'
-    target=${target//$quote/$dq_sentinel}
-    target=${target//$apostrophe/$sq_sentinel}
-    target=${(Q)target}
-    target=${target//$dq_sentinel/$quote}
-    target=${target//$sq_sentinel/$apostrophe}
-    target=${target//\%/%%}
+    # Undo git-info's backslash escaping while keeping literal quotes intact.
+    target=${target//(#m)\\?/${MATCH#\\}}
+    prompt_bryndin_clip_max_reply "$target"
+    target=${REPLY//\%/%%}
     target=":${color}${target}${_prompt_bryndin_fg[reset]}"
   fi
   REPLY="${git_info[bryndin-git-prefix]}${target}${git_info[bryndin-git-suffix]}"
 }
 
-#
-# Runs inside the async worker.  Prints the fully rendered git block; the
-# callback stores it in _prompt_bryndin_git and redraws the prompt.
-#
 function prompt_bryndin_async_git {
   emulate -L zsh
-  cd -q "$1" 2>/dev/null || return 1
-  (( ${+functions[git-info]} )) || return 1
-  git-info || return 1
-  prompt_bryndin_git_reply
-  # Include the directory the job ran in.  A job that was already running when
-  # the user changed directory can finish after precmd updated the global
-  # dispatch directory; the callback compares this tag with $PWD.
+  REPLY=''
+  if cd -q "$1" 2>/dev/null && (( ${+functions[git-info]} )) &&
+     GIT_OPTIONAL_LOCKS=0 git-info; then
+    prompt_bryndin_git_reply
+  fi
   print -rn -- "$1"$'\001'"$REPLY"
 }
 
 function prompt_bryndin_async_callback {
   emulate -L zsh
-
-  # zsh-async reports worker failures as [async]. Stop using the worker and
-  # fall back to synchronous git collection instead of printing errors on
-  # every prompt.
   if [[ $1 == '[async]' ]]; then
     _prompt_bryndin_async=0
-    # Clean up a dead zpty; the next prompt falls back to synchronous git.
-    (( ${+functions[async_stop_worker]} )) && \
-      async_stop_worker prompt_bryndin 2>/dev/null
+    (( ${+functions[async_stop_worker]} )) && async_stop_worker prompt_bryndin 2>/dev/null
     return 0
   fi
 
-  [[ $1 == prompt_bryndin_async_git ]] || return 0
-  local rendered=$3 job_pwd=''
-  if [[ $rendered == *$'\001'* ]]; then
-    job_pwd=${rendered%%$'\001'*}
-    rendered=${rendered#*$'\001'}
-    # Compare the directory the job actually ran in, not the directory of the
-    # most recent dispatch: an already-running job can finish after precmd
-    # has queued the next one.
-    [[ $job_pwd == $PWD ]] || return 0
-  else
-    # Compatibility with callbacks from an older worker that did not tag its
-    # output; this covers the usual flush-before-dispatch case.
-    [[ $_prompt_bryndin_async_pwd == $PWD ]] || return 0
-  fi
+  [[ $1 == prompt_bryndin_async_git && $3 == *$'\001'* ]] || return 0
+  local job_pwd=${3%%$'\001'*}
+  local rendered=${3#*$'\001'}
+  [[ $job_pwd == $PWD ]] || return 0
   [[ $rendered == $_prompt_bryndin_git ]] && return 0
   _prompt_bryndin_git=$rendered
-  # A longer git block can make the header overflow; refit the directory
-  # instead of letting reflow drop the git block that just arrived.
+  [[ $_prompt_bryndin_conf[single-line] == yes ]] && return 0
   prompt_bryndin_prepare_pwd
   prompt_bryndin_reflow
-  # Only redraw when zle is active (the callback also fires in scripts).
   zle && zle reset-prompt
 }
 
-function prompt_bryndin_preexec {
-  # Clear the previous command's status as soon as a new command is accepted.
-  _prompt_bryndin_status_text=''
-  _prompt_bryndin_cmd_start=$SECONDS
+function prompt_bryndin_format_duration_reply {
+  emulate -L zsh
+  local -i s=$1
+  if (( s < 60 )); then
+    REPLY="${s}s"
+  elif (( s < 3600 )); then
+    local -i m=$(( s / 60 )) rem=$(( s % 60 ))
+    (( rem > 0 )) && REPLY="${m}m ${rem}s" || REPLY="${m}m"
+  else
+    local -i h=$(( s / 3600 )) m=$(( (s % 3600) / 60 ))
+    (( m > 0 )) && REPLY="${h}h ${m}m" || REPLY="${h}h"
+  fi
 }
 
-# Runs first in the precmd chain, before other hooks can overwrite $?. The
-# prompt's %( ?..) indicator must reflect the user's last command, not the
-# status of a highlight/autosuggestion/precmd helper.
+function prompt_bryndin_preexec {
+  _prompt_bryndin_status_text=''
+  _prompt_bryndin_status_dismissed=0
+  _prompt_bryndin_cmd_start=${EPOCHREALTIME:-$SECONDS}
+}
+
 function prompt_bryndin_precmd_status {
   _prompt_bryndin_last_status=$?
+}
+
+# Check whether $PWD is inside the cached `_prompt_bryndin_git_root` worktree
+# without entering `.git` or a nested repository/submodule.
+function prompt_bryndin_in_cached_repo {
+  emulate -L zsh
+  local root=$_prompt_bryndin_git_root
+  [[ -n $root && -e ${root%/}/.git ]] || return 1
+  [[ $PWD == */.git || $PWD == */.git/* ]] && return 1
+  [[ $PWD == $root || $PWD == ${root%/}/* ]] || return 1
+  local d=$PWD
+  while [[ $d != $root && -n $d && $d != / ]]; do
+    [[ -e $d/.git ]] && return 1
+    d=${d:h}
+  done
+  return 0
 }
 
 function prompt_bryndin_precmd {
   emulate -L zsh
   setopt EXTENDED_GLOB
 
-  # Command duration (integer seconds; cleared after each command).
-  if (( _prompt_bryndin_cmd_start > 0 )); then
-    local elapsed=$(( SECONDS - _prompt_bryndin_cmd_start ))
-    _prompt_bryndin_cmd_start=0
-    (( elapsed > 0 )) && _prompt_bryndin_duration_text=" ${elapsed}s" \
-      || _prompt_bryndin_duration_text=''
-  else
-    _prompt_bryndin_duration_text=''
-  fi
-
-  # Get Git repository information.  In async mode the worker renders the
-  # block and the callback updates it; otherwise do it here synchronously.
-  if (( _prompt_bryndin_async )); then
-    # Do not show the previous repository's block while the worker catches up
-    # with a new directory.  Keep it when the new directory is still inside the
-    # same repository, so `cd src` does not blink the branch away.
-    if [[ -z $_prompt_bryndin_last_pwd || $PWD != $_prompt_bryndin_last_pwd ]]; then
-      local root=''
-      local root_dir=${_prompt_bryndin_git_root%/}
-      # `cd src' inside a known repository does not need to spawn git at all.
-      # The `${root%/}/*` form also handles a repository at `/`.
-      if [[ -n $_prompt_bryndin_git_root &&
-            ( $PWD == $_prompt_bryndin_git_root || $PWD == $root_dir/* ) ]]; then
-        root=$_prompt_bryndin_git_root
-      else
-        (( ${+commands[git]} )) && \
-          root=$(command git rev-parse --show-toplevel 2>/dev/null)
-      fi
-      if [[ -n $_prompt_bryndin_last_pwd && $root != $_prompt_bryndin_git_root ]]; then
-        _prompt_bryndin_git=''
-      fi
-      _prompt_bryndin_git_root=$root
-    fi
-    if ! zpty -t prompt_bryndin &>/dev/null; then
-      _prompt_bryndin_async=0
-      # Also unregister zsh-async's fd watcher/callback when the worker died
-      # between prompts.
-      (( ${+functions[async_stop_worker]} )) && \
-        async_stop_worker prompt_bryndin 2>/dev/null
-    else
-      # Drop queued jobs from previous directories so rapid cd commands do not
-      # build a backlog of obsolete git queries.
-      (( ${+functions[async_flush_jobs]} )) && \
-        async_flush_jobs prompt_bryndin 2>/dev/null
-      _prompt_bryndin_async_pwd=$PWD
-      if ! async_job prompt_bryndin prompt_bryndin_async_git "$PWD"; then
-        _prompt_bryndin_async=0
-        (( ${+functions[async_stop_worker]} )) && \
-          async_stop_worker prompt_bryndin 2>/dev/null
-      fi
-    fi
-  fi
-  _prompt_bryndin_last_pwd=$PWD
-
-  if (( ! _prompt_bryndin_async )); then
-    if (( ${+functions[git-info]} )) && git-info; then
-      prompt_bryndin_git_reply
-      _prompt_bryndin_git=$REPLY
-    else
-      # git-info may fail without clearing its associative array (or may be
-      # unavailable after a module unload); never reuse the previous repo.
-      _prompt_bryndin_git=''
+  # Command duration.
+  _prompt_bryndin_duration_text=''
+  if [[ -n $_prompt_bryndin_cmd_start ]]; then
+    local -F now=${EPOCHREALTIME:-$SECONDS} start=$_prompt_bryndin_cmd_start
+    local -i elapsed=0
+    (( now > start )) && (( elapsed = now - start ))
+    _prompt_bryndin_cmd_start=''
+    local min_sec=${_prompt_bryndin_conf[duration-min]:-2}
+    [[ $min_sec == <-> ]] || min_sec=2
+    (( min_sec < 1 )) && min_sec=1
+    if (( elapsed >= min_sec )); then
+      prompt_bryndin_format_duration_reply $elapsed
+      _prompt_bryndin_duration_text=" ${REPLY}"
     fi
   fi
 
-  # Get Virtualenv information. The python module returns early when no Python
-  # interpreter is installed, so python-info may not exist.  The block itself
-  # is built from the environment variables so the name can be escaped.
-  (( ${+functions[python-info]} )) && python-info
-  if [[ -n ${VIRTUAL_ENV:-} || -n ${CONDA_DEFAULT_ENV:-} ]]; then
-    prompt_bryndin_virtualenv_reply
-    _prompt_bryndin_venv=$REPLY
-  else
-    # Skip the helper when no environment is active.
-    _prompt_bryndin_venv=''
-  fi
-
-  # Keep the exit-status text in a variable instead of relying on %? at draw
-  # time. ZLE redraws can otherwise see the status of a prompt hook rather
-  # than the user's command.
-  if [[ $_prompt_bryndin_conf[exit-status] == yes ]]; then
-    if (( _prompt_bryndin_last_status != 0 )); then
-      local code=''
-      [[ $_prompt_bryndin_conf[show-return-code] == yes ]] && \
-        code="${_prompt_bryndin_last_status}"
-      _prompt_bryndin_status_text="${_prompt_bryndin_fg[error-color]}✘"
-      [[ -n $code ]] && _prompt_bryndin_status_text+=" ${code}"
-      _prompt_bryndin_status_text+="${_prompt_bryndin_fg[reset]}"
-    else
-      _prompt_bryndin_status_text=''
-    fi
+  # Last command exit status (suppressed if dismissed on keystroke without a new command).
+  if [[ $_prompt_bryndin_conf[exit-status] == yes ]] &&
+     (( ! _prompt_bryndin_status_dismissed && _prompt_bryndin_last_status != 0 )); then
+    _prompt_bryndin_status_text="${_prompt_bryndin_fg[error-color]}✘"
+    [[ $_prompt_bryndin_conf[show-return-code] == yes ]] && \
+      _prompt_bryndin_status_text+=" ${_prompt_bryndin_last_status}"
+    _prompt_bryndin_status_text+="${_prompt_bryndin_fg[reset]}"
   else
     _prompt_bryndin_status_text=''
   fi
 
-  # Format and fit the directory/header.  This is also called from the resize
-  # trap so a narrow terminal compresses the path and widening restores it.
-  prompt_bryndin_prepare_pwd
+  if [[ $_prompt_bryndin_conf[single-line] == yes ]]; then
+    _prompt_bryndin_header=''
+    return 0
+  fi
 
-  # Store the finished header as prompt text.  It is rendered as part of
-  # PROMPT rather than printed by precmd, so it survives clear-screen,
-  # reset-prompt, vi keymap switches and terminal resizes.
+  # Git block (skipped entirely when `git` is not in `blocks`).
+  if (( _prompt_bryndin_has_git_block )); then
+    if (( _prompt_bryndin_async )); then
+      if [[ -z $_prompt_bryndin_last_pwd || $PWD != $_prompt_bryndin_last_pwd ]]; then
+        local root=''
+        if prompt_bryndin_in_cached_repo; then
+          root=$_prompt_bryndin_git_root
+        elif (( ${+commands[git]} )); then
+          root=$(GIT_OPTIONAL_LOCKS=0 command git rev-parse --show-toplevel 2>/dev/null)
+        fi
+        if [[ -n $_prompt_bryndin_last_pwd && $root != $_prompt_bryndin_git_root ]]; then
+          _prompt_bryndin_git=''
+        fi
+        _prompt_bryndin_git_root=$root
+      fi
+      if ! zpty -t prompt_bryndin &>/dev/null; then
+        _prompt_bryndin_async=0
+        (( ${+functions[async_stop_worker]} )) && async_stop_worker prompt_bryndin 2>/dev/null
+      else
+        (( ${+functions[async_flush_jobs]} )) && async_flush_jobs prompt_bryndin 2>/dev/null
+        if ! async_job prompt_bryndin prompt_bryndin_async_git "$PWD"; then
+          _prompt_bryndin_async=0
+          (( ${+functions[async_stop_worker]} )) && async_stop_worker prompt_bryndin 2>/dev/null
+        fi
+      fi
+    fi
+    _prompt_bryndin_last_pwd=$PWD
+
+    if (( ! _prompt_bryndin_async )); then
+      if (( ${+functions[git-info]} )) && GIT_OPTIONAL_LOCKS=0 git-info; then
+        prompt_bryndin_git_reply
+        _prompt_bryndin_git=$REPLY
+      else
+        _prompt_bryndin_git=''
+      fi
+    fi
+  else
+    _prompt_bryndin_git=''
+  fi
+
+  # Virtualenv / Conda block (read directly from env vars without forking python-info).
+  if (( _prompt_bryndin_has_venv_block )) &&
+     [[ -n ${VIRTUAL_ENV:-} || -n ${CONDA_DEFAULT_ENV:-} ]]; then
+    prompt_bryndin_virtualenv_reply
+    _prompt_bryndin_venv=$REPLY
+  else
+    _prompt_bryndin_venv=''
+  fi
+
+  prompt_bryndin_prepare_pwd
   prompt_bryndin_reflow
-  return ${_prompt_bryndin_last_status:-0}
+  return 0
 }
 
-#
-# Reflow the header after a terminal resize.  This is installed as TRAPWINCH:
-# ZLE does not run line-pre-redraw on SIGWINCH, so the header would otherwise
-# keep its old width until the next command.
-#
 function prompt_bryndin_resize {
   emulate -L zsh
-  # Chain a trap the user already had installed, then do our own refit.
-  if (( _prompt_bryndin_had_trapwinch )) && \
-     (( ${+functions[_prompt_bryndin_user_trapwinch]} )); then
+  if (( _prompt_bryndin_had_trapwinch && ${+functions[_prompt_bryndin_user_trapwinch]} )); then
     _prompt_bryndin_user_trapwinch
   fi
-  [[ -n $_prompt_bryndin_header ]] || return 0
-  # Recompute the directory fit from the full path so narrowing compresses it
-  # and widening restores it, then repaint.
+  [[ $_prompt_bryndin_conf[single-line] == yes || -z $_prompt_bryndin_header ]] && return 0
   prompt_bryndin_prepare_pwd
   prompt_bryndin_reflow
-  # `zle' without arguments is the active-ZLE test; `[[ -o zle ]]' is true for
-  # the whole interactive session and would call reset-prompt while a builtin
-  # such as read is waiting.
   zle && zle reset-prompt
   return 0
 }
 
 function prompt_bryndin_line_pre_redraw {
   emulate -L zsh
-  # Keep the per-keystroke path cheap: reflow is handled by the resize trap.
   [[ -n ${BUFFER:-} && -n $_prompt_bryndin_status_text ]] || return 0
-
-  # Clearing the variable only updates the state: zsh expands PROMPT/RPROMPT
-  # when zle starts or when reset-prompt runs, not on every keystroke.  Leave
-  # the status alone while menu completion is active, where resetting the
-  # prompt would disturb the menu; the next normal redraw will clear it.
-  [[ ${KEYMAP:-} == menuselect ]] && return 0
+  [[ ${CONTEXT:-start} == start ]] || return 0
+  [[ ${KEYMAP:-} == menuselect || ${ZLE_STATE:-} == *isearch* ]] && return 0
 
   _prompt_bryndin_status_text=''
+  _prompt_bryndin_status_dismissed=1
   zle reset-prompt
   return 0
 }
 
-#
-# Preview used by `prompt -p bryndin'.  This mirrors prompt_preview_theme, but
-# runs editor-info after setup: the keymap indicator must use bryndin's
-# editor formats, not those of the theme being previewed over.
-#
+# Run preview inside a real subshell so `prompt -p bryndin` never mutates the
+# active theme's zstyles, hooks, globals or resize trap.
 function prompt_bryndin_preview {
-  emulate -L zsh
-  local +h PROMPT='' RPROMPT='' SPROMPT=''
-  local -a prompt_opts
-  # Preview runs in a subshell and prints immediately; an async git worker
-  # would be killed with the subshell and the first prompt would have no git
-  # block.  Let setup use the synchronous path instead.
-  local _prompt_bryndin_preview=1
-  print -n 'bryndin theme'
-  (( $# > 0 )) && print -n " with parameters \`$*'"
-  print ':'
-  zstyle -t ':prompt-theme' cleanup
-  prompt_bryndin_setup "$@"
-  (( ${#prompt_opts} )) && \
-    setopt noprompt{bang,cr,percent,sp,subst} "prompt${^prompt_opts[@]}"
-  prompt_bryndin_precmd
-  (( ${+functions[editor-info]} )) && editor-info 2>/dev/null
-  [[ -o promptcr ]] && print -n $'\r'
-  print -rP -- "${PS1}command arg1 arg2 ... argn"
+  (
+    emulate -L zsh
+    local +h PROMPT='' RPROMPT='' SPROMPT=''
+    local -a prompt_opts
+    local _prompt_bryndin_preview=1
+    print -n 'bryndin theme'
+    (( $# > 0 )) && print -n " with parameters \`$*'"
+    print ':'
+    prompt_bryndin_setup "$@"
+    (( ${#prompt_opts} )) && \
+      setopt noprompt{bang,cr,percent,sp,subst} "prompt${^prompt_opts[@]}"
+    prompt_bryndin_precmd
+    (( ${+functions[editor-info]} )) && editor-info 2>/dev/null
+    [[ -o promptcr ]] && print -n $'\r'
+    print -rP -- "${PROMPT}command arg1 arg2 ... argn"
+  )
 }
 
-#
-# Release everything the theme owns when another theme is selected.  promptinit
-# removes prompt_*_precmd/preexec hooks by name, but not our zle hook, async
-# worker, globals or zstyles.
-#
 function prompt_bryndin_teardown {
   emulate -L zsh
-  # Filter the hook arrays directly so cleanup also works when add-zsh-hook is
-  # not available in the current scope.
   precmd_functions=(${precmd_functions:#prompt_bryndin_*})
   preexec_functions=(${preexec_functions:#prompt_bryndin_*})
   (( ${+functions[add-zle-hook-widget]} )) && \
     add-zle-hook-widget -d line-pre-redraw prompt_bryndin_line_pre_redraw
 
-  # Restore the SIGWINCH trap only if it is still ours.
   if (( _prompt_bryndin_trapwinch_installed )); then
     if [[ $functions[TRAPWINCH] == *prompt_bryndin_resize* ]]; then
       if (( _prompt_bryndin_had_trapwinch )); then
@@ -903,43 +803,94 @@ function prompt_bryndin_teardown {
 
   (( ${+functions[async_stop_worker]} )) && async_stop_worker prompt_bryndin 2>/dev/null
 
+  if (( _prompt_bryndin_had_managed )); then
+    zstyle ':prezto:module:prompt' managed "$_prompt_bryndin_saved_managed"
+  else
+    zstyle -d ':prezto:module:prompt' managed
+  fi
+
   unset _prompt_bryndin_conf _prompt_bryndin_fg _prompt_bryndin_blocks \
-    _prompt_bryndin_block_text _prompt_bryndin_block_expanded \
-    _prompt_bryndin_left _prompt_bryndin_right _prompt_bryndin_left_expanded \
-    _prompt_bryndin_right_expanded _prompt_bryndin_header _prompt_bryndin_cur_dir \
-    _prompt_bryndin_filler_width _prompt_bryndin_overflow _prompt_bryndin_monochrome \
-    _prompt_bryndin_cmd_start _prompt_bryndin_duration_text \
-    _prompt_bryndin_git _prompt_bryndin_venv _prompt_bryndin_async \
+    _prompt_bryndin_drop_order _prompt_bryndin_block_text \
+    _prompt_bryndin_block_expanded _prompt_bryndin_left _prompt_bryndin_right \
+    _prompt_bryndin_left_expanded _prompt_bryndin_right_expanded \
+    _prompt_bryndin_header _prompt_bryndin_cur_dir \
+    _prompt_bryndin_cached_prompt_pwd _prompt_bryndin_has_cached_pwd \
+    _prompt_bryndin_filler_width _prompt_bryndin_overflow \
+    _prompt_bryndin_monochrome _prompt_bryndin_cmd_start \
+    _prompt_bryndin_duration_text _prompt_bryndin_git _prompt_bryndin_venv \
+    _prompt_bryndin_time _prompt_bryndin_async _prompt_bryndin_has_git_block \
+    _prompt_bryndin_has_venv_block _prompt_bryndin_has_time_block \
     _prompt_bryndin_last_status _prompt_bryndin_status_text \
-    _prompt_bryndin_async_pwd _prompt_bryndin_trapwinch_installed \
-    _prompt_bryndin_had_trapwinch _prompt_bryndin_saved_trapwinch \
-    _prompt_bryndin_last_pwd _prompt_bryndin_git_root
-  zstyle -d ':prezto:module:prompt' managed
+    _prompt_bryndin_status_dismissed _prompt_bryndin_installed \
+    _prompt_bryndin_trapwinch_installed _prompt_bryndin_had_trapwinch \
+    _prompt_bryndin_saved_trapwinch _prompt_bryndin_had_managed \
+    _prompt_bryndin_saved_managed _prompt_bryndin_last_pwd \
+    _prompt_bryndin_git_root
+}
+
+function prompt_bryndin_build_host_block_reply {
+  emulate -L zsh
+  local show_host=0 show_user=1
+  prompt_bryndin_is_remote && show_host=1
+
+  case $_prompt_bryndin_conf[user] in
+    no|never|false|off|0) show_user=0 ;;
+    auto) (( EUID == 0 || show_host )) || show_user=0 ;;
+  esac
+
+  if (( ! show_user && ! show_host )); then
+    REPLY=''
+    return 0
+  fi
+
+  local main_fg=${_prompt_bryndin_fg[main-color]}
+  local host_fg=${_prompt_bryndin_fg[host-color]}
+  local err_fg=${_prompt_bryndin_fg[error-color]}
+  local reset_fg=${_prompt_bryndin_fg[reset]}
+  local max=${_prompt_bryndin_conf[max-block-width]:-0}
+  [[ $max == <-> ]] || max=0
+
+  if (( max > 0 )); then
+    local raw=''
+    (( show_user )) && raw+=${(%):-%n}
+    (( show_user && show_host )) && raw+='@'
+    (( show_host )) && raw+=${(%):-%m}
+    if (( ${(m)#raw} > max )); then
+      prompt_bryndin_clip_reply "$raw" "$max"
+      local clipped=${REPLY//\%/%%}
+      local user_fg="%(!.${err_fg}.${host_fg})"
+      (( ! show_user )) && user_fg=$host_fg
+      REPLY="${main_fg}─(${user_fg}${clipped}${main_fg})${reset_fg}"
+      return 0
+    fi
+  fi
+
+  local inner=''
+  (( show_user )) && inner+="%(!.${err_fg}.${host_fg})%n${reset_fg}"
+  if (( show_host )); then
+    local sep=''
+    (( show_user )) && sep='@'
+    inner+="${host_fg}${sep}%m${reset_fg}"
+  fi
+  REPLY="${main_fg}─(${inner}${main_fg})${reset_fg}"
 }
 
 function prompt_bryndin_setup {
   emulate -L zsh
-  # A caller using `emulate -L' sets LOCAL_TRAPS; without this the resize trap
-  # would be restored when setup returns.
   unsetopt LOCAL_TRAPS
   prompt_opts=(cr percent sp subst)
 
-  # Build the colour map (this also re-reads zstyles, so `prompt bryndin' and
-  # previews pick up changes made after the theme was first sourced).
   prompt_bryndin_build_colors
 
-  # Load required functions.
+  zmodload -F zsh/datetime p:EPOCHREALTIME 2>/dev/null
   autoload -Uz add-zsh-hook add-zle-hook-widget
   prompt_bryndin_has_prompt_pwd && autoload -Uz prompt-pwd
 
-  # Add hook for calling git-info before each command.
   precmd_functions=(prompt_bryndin_precmd_status ${precmd_functions:#prompt_bryndin_precmd_status})
   add-zsh-hook precmd prompt_bryndin_precmd
   add-zsh-hook preexec prompt_bryndin_preexec
   add-zle-hook-widget line-pre-redraw prompt_bryndin_line_pre_redraw
 
-  # Reflow on SIGWINCH.  Save any existing trap so switching themes restores
-  # it, and chain it while this theme is active.
   if (( ! _prompt_bryndin_trapwinch_installed )); then
     if (( ${+functions[TRAPWINCH]} )); then
       _prompt_bryndin_had_trapwinch=1
@@ -954,45 +905,49 @@ function prompt_bryndin_setup {
     _prompt_bryndin_trapwinch_installed=1
   fi
 
-  # Required for the editor module to populate editor_info (see
-  # modules/prompt/README.md): without it the second prompt line is empty.
+  if (( ! _prompt_bryndin_installed )); then
+    if zstyle -s ':prezto:module:prompt' managed _prompt_bryndin_saved_managed; then
+      _prompt_bryndin_had_managed=1
+    else
+      _prompt_bryndin_had_managed=0
+      _prompt_bryndin_saved_managed=''
+    fi
+    _prompt_bryndin_installed=1
+  fi
   zstyle ':prezto:module:prompt' managed 'yes'
   (( ${+functions[prompt_cleanup]} )) && \
     prompt_cleanup 'prompt_bryndin_teardown' 2>/dev/null
 
-  # Set editor-info parameters.  These are consumed by editor-info at draw
-  # time, so monochrome mode needs its own colourless variants.
+  local c_red='' c_green='' c_yellow='' c_blue='' c_magenta='' c_cyan='' c_white='' c_off=''
   if (( _prompt_bryndin_monochrome )); then
     zstyle ':prezto:module:editor:info:completing' format '...'
     zstyle ':prezto:module:editor:info:keymap:primary' format '❯❯❯'
-    zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '♺'
+    zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format ' ♺'
     zstyle ':prezto:module:editor:info:keymap:alternate' format '❮❮❮'
   else
+    c_red='%F{red}' c_green='%F{green}' c_yellow='%F{yellow}' c_blue='%F{blue}'
+    c_magenta='%F{magenta}' c_cyan='%F{cyan}' c_white='%F{white}' c_off='%f'
     zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
     zstyle ':prezto:module:editor:info:keymap:primary' format '%B%F{red}❯%F{yellow}❯%F{green}❯%f%b'
-    zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '%F{red}♺%f'
+    zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format ' %F{red}♺%f'
     zstyle ':prezto:module:editor:info:keymap:alternate' format '%B%F{green}❮%F{yellow}❮%F{red}❮%f%b'
   fi
 
-  # Set git-info parameters.  Branch/position/commit are requested as raw
-  # values in separate keys.  They must never be substituted into a command
-  # (for example `$(coalesce "%b" ...)') because a legal ref name can contain
-  # a double quote: the resulting string would be a parse error.  The theme
-  # chooses the first non-empty value and escapes it as prompt text instead.
   zstyle ':prezto:module:git:info' verbose 'yes'
-  zstyle ':prezto:module:git:info:action' format ':%%B%F{yellow}%s%f%%b'
-  zstyle ':prezto:module:git:info:added' format ' %%B%F{green}✚%f%%b'
-  zstyle ':prezto:module:git:info:ahead' format ' %%B%F{yellow}⬆%f%%b'
-  zstyle ':prezto:module:git:info:behind' format ' %%B%F{yellow}⬇%f%%b'
+  zstyle ':prezto:module:git:info:action' format ":%%B${c_yellow}%s${c_off}%%b"
+  zstyle ':prezto:module:git:info:added' format " %%B${c_green}✚${c_off}%%b"
+  zstyle ':prezto:module:git:info:ahead' format " %%B${c_yellow}⬆${c_off}%%b"
+  zstyle ':prezto:module:git:info:behind' format " %%B${c_yellow}⬇${c_off}%%b"
   zstyle ':prezto:module:git:info:branch' format '%b'
   zstyle ':prezto:module:git:info:commit' format '%.7c'
-  zstyle ':prezto:module:git:info:deleted' format ' %%B%F{red}✖%f%%b'
-  zstyle ':prezto:module:git:info:modified' format ' %%B%F{blue}✱%f%%b'
+  zstyle ':prezto:module:git:info:deleted' format " %%B${c_red}✖${c_off}%%b"
+  zstyle ':prezto:module:git:info:modified' format " %%B${c_blue}✱${c_off}%%b"
   zstyle ':prezto:module:git:info:position' format '%p'
-  zstyle ':prezto:module:git:info:renamed' format ' %%B%F{magenta}➜%f%%b'
-  zstyle ':prezto:module:git:info:stashed' format ' %%B%F{cyan}✭%f%%b'
-  zstyle ':prezto:module:git:info:unmerged' format ' %%B%F{yellow}═%f%%b'
-  zstyle ':prezto:module:git:info:untracked' format ' %%B%F{white}◼%f%%b'
+  zstyle ':prezto:module:git:info:renamed' format " %%B${c_magenta}→${c_off}%%b"
+  zstyle ':prezto:module:git:info:stashed' format " %%B${c_cyan}✭${c_off}%%b"
+  zstyle ':prezto:module:git:info:unmerged' format " %%B${c_red}═${c_off}%%b"
+  zstyle ':prezto:module:git:info:untracked' format " %%B${c_white}◼${c_off}%%b"
+
   local main_fg=${_prompt_bryndin_fg[main-color]}
   local reset_fg=${_prompt_bryndin_fg[reset]}
   zstyle ':prezto:module:git:info:keys' format \
@@ -1002,43 +957,24 @@ function prompt_bryndin_setup {
     'bryndin-position' '%p' \
     'bryndin-commit' '%c'
 
-  # Keep virtualenv from prefixing the prompt with `(.venv) '.  In zsh, $PS1
-  # and $PROMPT are the same parameter, so a sourced activate script would
-  # edit this very theme's output.  Prezto's python module exports
-  # VIRTUAL_ENV_DISABLE_PROMPT only when virtualenvwrapper is initialised,
-  # which leaves plain `venv' environments defenceless, so do it here --
-  # matching pure, which swaps an empty/unset value for the same sentinel
-  # ('20') and so may other themes.  A deliberately different value (pure's
-  # "user took control" signal) must be preserved.
+  # Prevent plain `venv` activate scripts from prepending `(.venv) ` to $PS1.
   export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-20}"
-
-  # Set python-info (virtualenv) parameters.  Kept for compatibility with other
-  # themes; this theme renders the block from the env vars itself so it can
-  # escape the name (see prompt_bryndin_prepare_virtualenv).
   zstyle ':prezto:module:python:info:virtualenv' format \
     "${main_fg}─<${_prompt_bryndin_fg[virtualenv-color]}%v${main_fg}>${reset_fg}"
 
-  ### Header blocks
-  local time="$_prompt_bryndin_conf[time-format]"
-  local time_block="${main_fg}─(${_prompt_bryndin_fg[time-color]}${time}${main_fg})${reset_fg}"
+  local max=${_prompt_bryndin_conf[max-block-width]:-0}
+  local time_inner=$_prompt_bryndin_conf[time-format]
+  [[ $max == <-> ]] && (( max > 0 )) && time_inner='${_prompt_bryndin_time}'
+  local time_block="${main_fg}─(${_prompt_bryndin_fg[time-color]}${time_inner}${main_fg})${reset_fg}"
 
-  local host=''
-  prompt_bryndin_is_remote && host="${_prompt_bryndin_fg[host-color]}@%m${reset_fg}"
-  # Keep the host outside the root/non-root branch.  It used to live in the
-  # non-root branch only, so a remote root session lost the hostname.
-  local host_block="${main_fg}─(${reset_fg}%(!.${_prompt_bryndin_fg[error-color]}.${_prompt_bryndin_fg[host-color]})%n${reset_fg}${host}${main_fg})${reset_fg}"
-
+  prompt_bryndin_build_host_block_reply
+  local host_block=$REPLY
   local git_block='${_prompt_bryndin_git}'
-
   local virtualenv_block='${_prompt_bryndin_venv}'
-
   local dir_block="${main_fg}[${_prompt_bryndin_fg[dir-color]}"'${_prompt_bryndin_cur_dir}'"${main_fg}]─${reset_fg}"
 
-  # Define prompts.  Blocks are selected (and ordered) by the `blocks` zstyle.
-  # Keep the individual templates as well, so reflow can drop whole blocks on
-  # a terminal too narrow to show them all.
-  typeset -gA _prompt_bryndin_block_text
   _prompt_bryndin_block_text=()
+  _prompt_bryndin_left=''
   local block
   for block in $_prompt_bryndin_blocks; do
     case $block in
@@ -1047,46 +983,32 @@ function prompt_bryndin_setup {
       virtualenv) _prompt_bryndin_block_text[virtualenv]=$virtualenv_block ;;
       git)        _prompt_bryndin_block_text[git]=$git_block ;;
     esac
-  done
-
-  _prompt_bryndin_left=''
-  for block in $_prompt_bryndin_blocks; do
     _prompt_bryndin_left+=$_prompt_bryndin_block_text[$block]
   done
-  _prompt_bryndin_right="${dir_block}"
+  _prompt_bryndin_right=$dir_block
+
+  local overwrite_seg=''
+  [[ $_prompt_bryndin_conf[overwrite] == yes ]] && overwrite_seg='${editor_info[overwrite]}'
   if [[ $_prompt_bryndin_conf[keymap-indicator] == yes ]]; then
-    # The ZLE keymap indicator (❯❯❯ / ❮❮❮) is opt-in: many people prefer a
-    # bare input line.  It requires the `managed' zstyle above to be populated.
-    PROMPT="%(!. %B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b.)"'${editor_info[keymap]}'
+    PROMPT="%(!.%B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b .)"'${editor_info[keymap]}'"${overwrite_seg} "
   else
-    # Keep a basic prompt character when the keymap indicator is disabled.
-    # Without it the non-root branch of %(!...) is empty, leaving a bare line.
-    PROMPT="%(!. %B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b.%B${_prompt_bryndin_fg[main-color]}❯${reset_fg}%b)"
+    PROMPT="%(!.%B${_prompt_bryndin_fg[error-color]}#${reset_fg}%b.%B${_prompt_bryndin_fg[main-color]}❯${reset_fg}%b)${overwrite_seg} "
   fi
 
-  # Prepend the header.  Keeping it inside PROMPT (instead of printing it from
-  # precmd) means zle redraws reproduce it.  `single-line' drops it entirely.
   if [[ $_prompt_bryndin_conf[single-line] != yes ]]; then
     local newline="${prompt_newline:-$'\n'}"
-    PROMPT='${_prompt_bryndin_header}'"${newline}"$PROMPT
+    PROMPT='${_prompt_bryndin_header}'"${newline}${PROMPT}"
   fi
+
   if (( _prompt_bryndin_monochrome )); then
     SPROMPT='zsh: correct %R to %r [nyae]? '
   else
     SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
   fi
 
-  # Last command status on the right of the input line.  The numeric code is
-  # opt-in through the framework-wide show-return-val style. The value is
-  # computed in precmd so ZLE redraws do not pick up a helper's status.
   RPROMPT=''
   [[ $_prompt_bryndin_conf[exit-status] == yes ]] && \
     RPROMPT='${_prompt_bryndin_status_text}'
-
-  # Optional context indicators.  All are prompt strings: %-escapes and ${...}
-  # are evaluated by zsh at draw time, not at setup time.  Each segment starts
-  # with a space and none ends with one, so RPROMPT never leaves a gap against
-  # the right terminal edge.
   [[ $_prompt_bryndin_conf[jobs] == yes ]] && \
     RPROMPT+="%(1j. ${main_fg}[%j&]${reset_fg}.)"
   [[ $_prompt_bryndin_conf[history] == yes ]] && \
@@ -1095,26 +1017,25 @@ function prompt_bryndin_setup {
     RPROMPT+='${_prompt_bryndin_duration_text}'
   [[ $_prompt_bryndin_conf[vim] == yes ]] && \
     RPROMPT+='${VIM:+" %BV'"${reset_fg}"'%b"}'
-  [[ $_prompt_bryndin_conf[overwrite] == yes ]] && \
-    PROMPT+='${editor_info[overwrite]}'
 
-  # Optional async git status.  Start the worker last: zpty workers inherit
-  # the parent's zstyle database at fork time, so the git-info formats must be
-  # configured before this point or the worker renders an empty git block.
+  # Restart any previous async worker so updated zstyles take effect, and only
+  # start one when the header and `git` block are actually enabled.
+  (( ${+functions[async_stop_worker]} )) && async_stop_worker prompt_bryndin 2>/dev/null
   _prompt_bryndin_async=0
   if [[ $_prompt_bryndin_conf[async] == yes &&
-        -z ${_prompt_bryndin_preview:-} ]]; then
+        $_prompt_bryndin_conf[single-line] != yes &&
+        -z ${_prompt_bryndin_preview:-} ]] &&
+     (( _prompt_bryndin_has_git_block )); then
     local dir async_file=''
     for dir in $fpath; do
       [[ -r $dir/async ]] && { async_file=$dir/async; break }
     done
     if [[ -n $async_file ]]; then
       autoload -Uz async && async
-      if (( ${+functions[async_start_worker]} )); then
-        if async_start_worker prompt_bryndin -n -u; then
-          async_register_callback prompt_bryndin prompt_bryndin_async_callback
-          _prompt_bryndin_async=1
-        fi
+      if (( ${+functions[async_start_worker]} )) &&
+         async_start_worker prompt_bryndin -n -u; then
+        async_register_callback prompt_bryndin prompt_bryndin_async_callback
+        _prompt_bryndin_async=1
       fi
     fi
   fi

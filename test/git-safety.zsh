@@ -136,4 +136,13 @@ render_git
 [[ $_prompt_bryndin_git == *'v1.0'* ]] || \
   fail "position fallback missing: $_prompt_bryndin_git"
 
+# Verify renamed uses '→' (not '➜') and unmerged uses red (not yellow).
+local renamed_fmt unmerged_fmt
+zstyle -s ':prezto:module:git:info:renamed' format renamed_fmt
+zstyle -s ':prezto:module:git:info:unmerged' format unmerged_fmt
+[[ $renamed_fmt == *'→'* && $renamed_fmt != *'➜'* ]] || \
+  fail "renamed glyph should be →: $renamed_fmt"
+[[ $unmerged_fmt == *'%F{red}'* ]] || \
+  fail "unmerged indicator should be red: $unmerged_fmt"
+
 print "PASS: git ref names are rendered safely"

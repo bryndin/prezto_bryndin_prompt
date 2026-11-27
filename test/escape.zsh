@@ -10,6 +10,7 @@ emulate -LR zsh
 zmodload -i zsh/zutil
 setopt EXTENDED_GLOB PROMPT_SUBST PROMPT_PERCENT MULTIBYTE
 
+unset VIRTUAL_ENV CONDA_DEFAULT_ENV NO_COLOR
 local theme=${1:-${0:A:h:h}/prompt_bryndin_setup}
 function pmodload { : }
 function add-zsh-hook { : }
@@ -23,13 +24,9 @@ prompt_newline=$'\n%{\r%}'
 source "$theme"
 
 VIRTUAL_ENV='/tmp/100%done'
-local block=$(prompt_bryndin_prepare_virtualenv)
-[[ $block == *'100%%done'* ]] || {
-  print -u2 "FAIL: venv name not escaped: $block"; exit 1
-}
 prompt_bryndin_virtualenv_reply
-[[ $REPLY == "$block" ]] || {
-  print -u2 "FAIL: virtualenv reply differs: $REPLY != $block"; exit 1
+[[ $REPLY == *'100%%done'* ]] || {
+  print -u2 "FAIL: venv name not escaped: $REPLY"; exit 1
 }
 
 COLUMNS=80
@@ -44,21 +41,17 @@ local rendered=$(print -P -- "$_prompt_bryndin_header")
 
 # $, backticks and backslashes are literal: no defence-in-depth backslashes.
 local tricky='$(echo PWNED)'
-local escaped=$(prompt_bryndin_escape "$tricky")
-[[ $escaped == "$tricky" ]] || {
-  print -u2 "FAIL: dollar sign was escaped: $escaped"; exit 1
-}
-local backslash=$(prompt_bryndin_escape 'x\y')
-[[ $backslash == 'x\y' ]] || {
-  print -u2 "FAIL: backslash was escaped: $backslash"; exit 1
+prompt_bryndin_escape_reply "$tricky"
+[[ $REPLY == "$tricky" ]] || {
+  print -u2 "FAIL: dollar sign was escaped: $REPLY"; exit 1
 }
 prompt_bryndin_escape_reply 'x\y'
-[[ $REPLY == "$backslash" ]] || {
-  print -u2 "FAIL: escape reply differs: $REPLY != $backslash"; exit 1
+[[ $REPLY == 'x\y' ]] || {
+  print -u2 "FAIL: backslash was escaped: $REPLY"; exit 1
 }
-local backtick=$(prompt_bryndin_escape 'x`y')
-[[ $backtick == 'x`y' ]] || {
-  print -u2 "FAIL: backtick was escaped: $backtick"; exit 1
+prompt_bryndin_escape_reply 'x`y'
+[[ $REPLY == 'x`y' ]] || {
+  print -u2 "FAIL: backtick was escaped: $REPLY"; exit 1
 }
 
 # A command substitution in a venv name is displayed literally and never run,
